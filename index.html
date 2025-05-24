@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tile acceptance calculator</title>
+</head>
+<body>
+  <input type="text" id="textInput" placeholder="Enter hand">
+  <label><input type="checkbox" id="checkBox"> Display all results</label>
+  <button onclick="sendData()">Calculate</button>
+  <p id="result"></p>
+
+  <script>
+    function sendData() {
+      const input = document.getElementById("textInput").value;
+      const checkbox = document.getElementById("checkBox").checked;
+
+      fetch('http://localhost:5000/calculate-tile-acceptance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, checkbox })
+      })
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unknown error');
+      }
+      document.getElementById("result").innerText = data.result;
+    })
+    .catch(error => {
+      document.getElementById("result").innerText = "Error: " + error.message;
+    });
+    }
+  </script>
+</body>
+</html>
