@@ -151,12 +151,19 @@ def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, a
                 (merge_group_tuple(groups, new_group), residue + found_residue))
     return new_concatenated_results, acceptance
 
+def print_shanten(best_groups):
+    real_shanten = min(len(residue) for group, residue in best_groups)
+    groups, residue = best_groups[0]
+    nb_tiles = sum(len(group) for group in groups) + len(residue)
+    to_discard = nb_tiles - 13
+    if nb_tiles == 13:
+        return f"{real_shanten} away ({len(best_groups)} results)\n"
+    return f"{real_shanten - to_discard} away with {to_discard} tile to discard ({len(best_groups)} results)\n"
 
 def print_result(best_groups):
     if not best_groups:
         return "Too far away"
-    real_shanten = min(len(residue) for group, residue in best_groups)
-    to_print = f"{real_shanten} away ({len(best_groups)} results)\n"
+    to_print = print_shanten(best_groups)
     if len(best_groups) < 10:
         to_print += "\n".join(str(res) for res in best_groups) + '\n'
         return to_print
@@ -263,6 +270,9 @@ def get_acceptance_tile_number(hand: MahjongHand, acceptance_tiles: list[Mahjong
     return total
 
 def analyze_hand(hand: MahjongHand, display_all=False) -> str:
+    if len(hand.hand_tiles) < 13:
+        raise AttributeError('Not enough tiles. At least 13 are needed for analysis.')
+
     results = {}
     best_results = []
     closest_away = 15
@@ -383,7 +393,6 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 
 if __name__ == "__main__":
-    #print('469s111246m466p5z')
-    #analyze_hand(MahjongHand(parse_tiles('469s111246m466p5z')))
-    random_hand = generate_random_closed_hand(2)
-    print(analyze_hand(random_hand, display_all=True))
+    print(analyze_hand(MahjongHand(parse_tiles('1234789p1356m667s'))))
+    # random_hand = generate_random_closed_hand(2)
+    # print(analyze_hand(random_hand, display_all=True))
