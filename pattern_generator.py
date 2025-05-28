@@ -3,10 +3,29 @@
 """
 from typing import Iterator
 
-from mahjong_objects import Constraint, Family
+from mahjong_objects import Family
 
 
 def pattern_generator(input_pattern: str) -> Iterator[str]:
+    """
+    generator of strict tile patterns given wildcard patterns
+
+    Wildcards :
+    - lower case letters except s, m, p, z : 3-families wildcard
+      will generate a new pattern replacing the wildcard by s, m and p,
+      without conflicting with the other family wildcards
+      Example : 123a456b will generate 123s456p, 123s456m, 123m456s, 123m456p, 123p456s and 123p456m
+
+    - upper case letters : tile number wildcard
+      will generate a new pattern replacing the wildcard by a number between 1 and 9,
+      keeping all wildcards contained between 1 and 9, and in the same order without conflict
+      Example : ABCsCDEpEFGm will generate 123s345p567m, 234s456p678m and 345s567p789m
+
+    Both wildcard types can be mixed.
+
+    :param input_pattern: wildcard pattern
+    :return: iterator of strict tile patterns
+    """
     return _pattern_generator("", input_pattern, {}, {})
 
 
@@ -91,8 +110,7 @@ def _pattern_generator(parsed: str, to_parse: str, family_wildcards: dict[str, F
             if global_wildcard_parse:
                 for iterator in _pattern_resolve_number_wildcards(parsed, to_parse, family_wildcards, number_wildcards,
                                                                   global_wildcard_parse, idx, character):
-                    for result in iterator:
-                        yield result
+                    yield from iterator
                 return
             currently_parsed += character
         elif character.isupper():
@@ -100,11 +118,10 @@ def _pattern_generator(parsed: str, to_parse: str, family_wildcards: dict[str, F
         elif character.islower():
             for iterator in _pattern_resolve_family_wildcard(parsed, to_parse, family_wildcards, number_wildcards,
                                                              currently_parsed, global_wildcard_parse, idx, character):
-                for result in iterator:
-                    yield result
+                yield from iterator
             return
         else:
-            raise AttributeError('Misplaced or unknown character')
+            raise AttributeError(f'Misplaced or unknown character "{character}"')
 
     if parsed + currently_parsed:
         yield parsed + currently_parsed

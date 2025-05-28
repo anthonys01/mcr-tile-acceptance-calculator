@@ -20,12 +20,9 @@ class Constraint(Enum):
     """
     ORDINARY = auto()
     NO_HONOR = auto()
-    ALL_PUNG = auto()
     FULL_TERMINALS = auto()
     FULL_HONORS = auto()
     FULL_TERMINALS_OR_HONORS = auto()
-    DRAGONS = auto()
-    WIND = auto()
     CONTAINS_TERMINALS_OR_HONORS = auto()
     FIRST_FOUR = auto()
     LAST_FOUR = auto()
@@ -67,13 +64,55 @@ class MahjongTile:
         """
         return self.family == Family.HONOR and  5 <= self.number <= 7
 
+    def is_honor(self):
+        """
+        is an honor tile
+        :return: True if honor tile
+        """
+        return self.family == Family.HONOR
+
     def is_compatible_with_half_flush(self, family: Family):
         """
         can be a half flush tile
         :param family: half flush family
         :return: true is compatible
         """
-        return self.family == family or self.family == Family.HONOR
+        return self.family in (family, Family.HONOR)
+
+    def is_symmetric(self):
+        """
+        is a symmetric tile
+        :return: True if symmetric
+        """
+        return str(self) in {"5z", "1p", "2p", "3p", "4p", "5p", "8p", "9p", "2s", "4s", "5s", "6s", "8s", "9s"}
+
+    def is_green(self):
+        """
+        is a green tile
+        :return: True if green
+        """
+        return str(self) in {"6z", "2s", "3s", "4s", "6s", "8s"}
+
+    def is_even(self):
+        """
+        is an even tile
+        :return: True if even
+        """
+        return self.family != Family.HONOR and self.number % 2 == 0
+
+    def is_terminal(self):
+        """
+        is a terminal tile
+        :return: True if terminal
+        """
+        return self.family != Family.HONOR and self.number in (1, 9)
+
+    def is_ordinary(self):
+        """
+        is an ordinary tile
+        :return: True if ordinary
+        """
+        return self.family != Family.HONOR and 2 <= self.number <= 8
 
     def __eq__(self, other):
         if isinstance(other, MahjongTile):
@@ -95,6 +134,9 @@ class MahjongTile:
 
 MahjongTiles = list[MahjongTile]
 MahjongGroup = tuple[MahjongTile, ...]
+MahjongGroups = tuple[MahjongGroup, ...]
+MahjongCombination = tuple[MahjongGroups, MahjongTiles]
+MahjongGroupAndResidue = tuple[MahjongGroup, MahjongTiles]
 
 class MahjongHand:
     """
@@ -144,6 +186,12 @@ class MahjongHand:
         return str(self)
 
 def get_tiles_from_family(tiles: MahjongTiles, family: Family):
+    """
+    filter given tiles and return only the one matching family
+    :param tiles: tiles to filter
+    :param family: family
+    :return: the tiles matching given family
+    """
     found: MahjongTiles = []
     for tile in tiles:
         if tile.family == family:
@@ -188,5 +236,3 @@ def parse_tiles(tiles: str) -> MahjongTiles:
     if current_numbers:
         raise AttributeError(f'Missing family denomination for {"".join(str(num) for num in current_numbers)}')
     return parsed
-
-
