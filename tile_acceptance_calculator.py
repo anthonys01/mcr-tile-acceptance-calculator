@@ -23,22 +23,24 @@ class HandType(Enum):
     SEVEN_PAIRS = "Seven Pairs"
     HALF_FLUSH = "Half Flush"
     ALL_TYPES = "All Types"
-    KNITTED = "Knitted With Honors"
+    KNITTED = "Knitted"
+    FIRST_OR_LAST_N_TILES = "First or Last n tiles"
 
 
-def _get_read_groups_from_combi_tiles(combi: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
-    full_groups: list[MahjongCombination] = all_groups_for(full_combination, 3, 0, 0)
+def _get_read_groups_from_combi_tiles(hand_tiles: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
+    combi_list = all_groups_for(full_combination, 3, 0, 0)
+    return _get_read_groups_from_full_groups(hand_tiles, combi_list[0][0])
+
+def _get_read_groups_from_full_groups(hand_tiles: MahjongTiles, groups: MahjongGroups) -> list[MahjongGroup]:
     result: list[MahjongGroup] = []
-    tiles_left = list(combi)
-    for full_res in full_groups:
-        full_group, _ = full_res
-        for group in full_group:
-            new_group = []
-            for tile in group:
-                if tile in tiles_left:
-                    tiles_left.remove(tile)
-                    new_group.append(tile)
-            result.append(tuple(new_group))
+    tiles_left = list(hand_tiles)
+    for group in groups:
+        new_group = []
+        for tile in group:
+            if tile in tiles_left:
+                tiles_left.remove(tile)
+                new_group.append(tile)
+        result.append(tuple(new_group))
     return result
 
 def _can_construct_seven_pairs(hand: MahjongHand):
@@ -205,8 +207,8 @@ def _print_result(best_groups) -> str:
     to_print += "\n".join(str(res) for res in nice_groups[:10]) + '\n...\n'
     return to_print
 
-def _can_construct(hand: MahjongHand, input_pattern: str) -> tuple[list[tuple[[list[MahjongGroup], MahjongTiles]]],
-                                                                  set[MahjongTile]]:
+def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str) -> \
+                                        tuple[list[tuple[[list[MahjongGroup], MahjongTiles]]], set[MahjongTile]]:
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
     best_combi: list[MahjongGroup] = []
@@ -219,7 +221,7 @@ def _can_construct(hand: MahjongHand, input_pattern: str) -> tuple[list[tuple[[l
         tiles = hand.get_residue_after(combi)
         for tile in missing:
             combi.remove(tile)
-        shanten, result = _can_construct_combination(tiles)
+        shanten, result = _can_construct_one_group_one_pair(tiles)
         if shanten < best_shanten:
             best_shanten = shanten
             best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi)
@@ -279,7 +281,7 @@ def _get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
     return acceptance
 
 
-def _can_construct_combination(tiles: MahjongTiles) -> tuple[int, list[MahjongCombination]]:
+def _can_construct_one_group_one_pair(tiles: MahjongTiles) -> tuple[int, list[MahjongCombination]]:
     best_groups: list[MahjongCombination] = all_groups_for(tiles, 0, 1, 1)
     best_groups += all_groups_for(tiles, 1, 0, 1)
     real_shanten = min(len(residue) for group, residue in best_groups)
@@ -297,19 +299,51 @@ def _get_acceptance_tile_number(hand: MahjongHand, acceptance_tiles: MahjongTile
     return total
 
 
+def _can_construct_knitted(hand: MahjongHand):
+    best_shanten: int = 13
+    best_result: list[MahjongCombination] = []
+    best_combi: list[MahjongGroup] = []
+    best_acceptance: MahjongTiles = []
+
+    for pattern in pattern_generator('147a258b369c'):
+        orig_combi = parse_tiles(pattern)
+        combi = list(orig_combi)
+        missing = hand.get_missing_tiles(combi)
+        tiles = hand.get_residue_after(combi)
+        for tile in missing:
+            combi.remove(tile)
+        usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
+        leftover = list(tiles)
+        for tile in usable_honor_tiles:
+            leftover.remove(tile)
+        shanten = len(leftover)
+        if shanten < best_shanten:
+            best_shanten = shanten
+            best_combi = _get_read_groups_from_full_groups(combi,
+                                        (tuple(orig_combi[:3]), tuple(orig_combi[3:6]), tuple(orig_combi[6:])))
+            best_result = [(tuple([tuple(usable_honor_tiles)]), leftover)]
+            best_acceptance = missing
+    acceptance: set[MahjongTile] = set(best_acceptance)
+    result_to_return: list[tuple[[list[MahjongGroup], MahjongTiles]]] = []
+    for groups, res in best_result:
+        acceptance.update(set(parse_tiles('1234567z')) - set(groups[0]))
+        result_to_return.append((best_combi + list(groups), res))
+    return result_to_return, acceptance
+
+
 def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
     result, acceptance = [], []
     match hand_type:
         case HandType.MIXED_SHIFTED:
-            result, acceptance = _can_construct(hand, 'ABCaBCDbCDEc')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaBCDbCDEc')
         case HandType.MIXED_STRAIGHT:
-            result, acceptance = _can_construct(hand, '123a456b789c')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, '123a456b789c')
         case HandType.TRIPLE_CHOWS:
-            result, acceptance = _can_construct(hand, 'ABCaABCbABCc')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaABCbABCc')
         case HandType.PURE_SHIFTED:
-            result, acceptance = _can_construct(hand, 'ABCCDEEFGa')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCCDEEFGa')
         case HandType.PURE_STRAIGHT:
-            result, acceptance = _can_construct(hand, '123456789a')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, '123456789a')
         case HandType.SEVEN_PAIRS:
             result, acceptance = _can_construct_seven_pairs(hand)
         case HandType.ALL_PUNGS:
@@ -318,6 +352,8 @@ def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
             result, acceptance = _can_construct_half_flush(hand)
         case HandType.ALL_TYPES:
             result, acceptance = _can_construct_all_types(hand)
+        case HandType.KNITTED:
+            result, acceptance = _can_construct_knitted(hand)
     return result, acceptance
 
 
@@ -339,6 +375,8 @@ def analyze_hand(hand: MahjongHand, display_all=False) -> str:
 
     for hand_type in HandType:
         hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand)
+        if not hand_results:
+            continue
         away = len(hand_results[0][1])
         if away <= closest_away:
             if away < closest_away:
@@ -371,7 +409,7 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
-    # random_hand = MahjongHand(parse_tiles("134679s123p1122z"))
+    # random_hand = MahjongHand(parse_tiles("14s3569m58p12456z"))
     print(analyze_hand(random_hand, display_all=True))
     #from timeit import default_timer as timer
     #start = timer()

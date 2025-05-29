@@ -180,6 +180,8 @@ def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_sa
     :param constraints: constraints to respect
     :return: list of all combinations matching the requirements, and their residue tiles
     """
+    if not constraints:
+        raise AttributeError("Constraints cannot be None or empty")
     return _find_all_groups_for(tiles, sequence, three_same, pair, constraints, set(), ())
 
 def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> MahjongGroups:
