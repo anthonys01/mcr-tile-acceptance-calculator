@@ -23,6 +23,7 @@ class HandType(Enum):
     SEVEN_PAIRS = "Seven Pairs"
     HALF_FLUSH = "Half Flush"
     ALL_TYPES = "All Types"
+    KNITTED = "Knitted With Honors"
 
 
 def _get_read_groups_from_combi_tiles(combi: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
@@ -96,9 +97,12 @@ def _can_construct_half_flush(hand: MahjongHand):
         print("Too far away")
         return [], []
 
+    return best_groups, _get_half_flush_acceptance(hand, best_groups)
+
+def _get_half_flush_acceptance(hand, best_groups):
     acceptance = set()
     has_empty_group = False
-    for best_group, residue in best_groups:
+    for best_group, _ in best_groups:
         acceptance.update(_get_tile_acceptance_of_groups(best_group))
         if _has_empty_group(best_group):
             has_empty_group = True
@@ -110,7 +114,7 @@ def _can_construct_half_flush(hand: MahjongHand):
         for tile in parse_tiles('1234567z'):
             if tile not in acceptance and hand.hand_tiles.count(tile) < 2:
                 acceptance.add(tile)
-    return best_groups, acceptance
+    return acceptance
 
 def _has_empty_group(groups):
     for group in groups:
