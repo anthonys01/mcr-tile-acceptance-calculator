@@ -1,6 +1,7 @@
 """
     Tile Acceptance calculator
 """
+from collections import Counter
 from enum import Enum
 from itertools import chain
 
@@ -424,6 +425,18 @@ def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
     return result, acceptance
 
 
+def _print_best_discard_choice(best_results, results):
+    tile_count = Counter()
+    for best_result in best_results:
+        for _, residue in results[best_result]:
+            tile_count.update(residue)
+    most_useless_tiles = tile_count.most_common(1)
+    if most_useless_tiles:
+        return f"Tile to discard next: {most_useless_tiles[0][0]}\n"
+    return '\n'
+
+
+
 def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
     """
     analyze given mahjong hand for each supported hand type
@@ -465,6 +478,8 @@ def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
         printed_result += _print_result(results[result_type])
         printed_result += "Tile acceptance " + str(sorted(acceptance[result_type])) + \
               f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
+    printed_result += '-----------------------------\n'
+    printed_result += _print_best_discard_choice(best_results, results)
     return printed_result
 
 
@@ -480,8 +495,8 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
-    # random_hand = MahjongHand(parse_tiles("14s3569m58p12456z"))
-    print(analyze_hand(random_hand, display_all=True))
+    # random_hand = MahjongHand(parse_tiles("1234789p1356m667s"))
+    print(analyze_hand(random_hand, display_all=False))
     #from timeit import default_timer as timer
     #start = timer()
     #for _ in range(10):
