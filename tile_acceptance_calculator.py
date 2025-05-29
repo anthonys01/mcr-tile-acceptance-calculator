@@ -1,6 +1,7 @@
 """
     Tile Acceptance calculator
 """
+from enum import Enum
 from itertools import chain
 
 from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple, \
@@ -8,6 +9,20 @@ from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, m
 from mahjong_objects import MahjongTiles, MahjongTile, Family, MahjongHand, MahjongGroup, Constraint, \
     get_tiles_from_family, parse_tiles, generate_random_closed_hand, MahjongGroups, MahjongCombination
 from pattern_generator import pattern_generator
+
+class HandType(Enum):
+    """
+        Types of hand to analyze
+    """
+    MIXED_STRAIGHT = "Mixed Straight"
+    MIXED_SHIFTED = "Mixed Shifted"
+    PURE_STRAIGHT = "Pure Straight"
+    PURE_SHIFTED = "Pure Shifted"
+    TRIPLE_CHOWS = "Triple Chows"
+    ALL_PUNGS = "All Pungs"
+    SEVEN_PAIRS = "Seven Pairs"
+    HALF_FLUSH = "Half Flush"
+    ALL_TYPES = "All Types"
 
 
 def _get_read_groups_from_combi_tiles(combi: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
@@ -24,21 +39,6 @@ def _get_read_groups_from_combi_tiles(combi: MahjongTiles, full_combination: Mah
                     new_group.append(tile)
             result.append(tuple(new_group))
     return result
-
-def _can_construct_straight(hand: MahjongHand):
-    return _can_construct(hand, '123a456b789c')
-
-def _can_construct_shifted(hand: MahjongHand):
-    return _can_construct(hand, 'ABCaBCDbCDEc')
-
-def _can_construct_triple_chows(hand: MahjongHand):
-    return _can_construct(hand, 'ABCaABCbABCc')
-
-def _can_construct_pure_straight(hand: MahjongHand):
-    return _can_construct(hand, '123456789c')
-
-def _can_construct_pure_shifted(hand: MahjongHand):
-    return _can_construct(hand, 'ABCBCDCDEc')
 
 def _can_construct_seven_pairs(hand: MahjongHand):
     acceptance = set()
@@ -293,7 +293,30 @@ def _get_acceptance_tile_number(hand: MahjongHand, acceptance_tiles: MahjongTile
     return total
 
 
-# pylint: disable=too-many-branches
+def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
+    result, acceptance = [], []
+    match hand_type:
+        case HandType.MIXED_SHIFTED:
+            result, acceptance = _can_construct(hand, 'ABCaBCDbCDEc')
+        case HandType.MIXED_STRAIGHT:
+            result, acceptance = _can_construct(hand, '123a456b789c')
+        case HandType.TRIPLE_CHOWS:
+            result, acceptance = _can_construct(hand, 'ABCaABCbABCc')
+        case HandType.PURE_SHIFTED:
+            result, acceptance = _can_construct(hand, 'ABCCDEEFGa')
+        case HandType.PURE_STRAIGHT:
+            result, acceptance = _can_construct(hand, '123456789a')
+        case HandType.SEVEN_PAIRS:
+            result, acceptance = _can_construct_seven_pairs(hand)
+        case HandType.ALL_PUNGS:
+            result, acceptance = _can_construct_all_pungs(hand)
+        case HandType.HALF_FLUSH:
+            result, acceptance = _can_construct_half_flush(hand)
+        case HandType.ALL_TYPES:
+            result, acceptance = _can_construct_all_types(hand)
+    return result, acceptance
+
+
 def analyze_hand(hand: MahjongHand, display_all=False) -> str:
     """
     analyze given mahjong hand for each supported hand type
@@ -310,104 +333,16 @@ def analyze_hand(hand: MahjongHand, display_all=False) -> str:
 
     acceptance = {}
 
-    straight_results, straight_acceptance = _can_construct_straight(hand)
-    # print_result(straight_results)
-    away = len(straight_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Straight")
-    results["Straight"] = straight_results
-    acceptance["Straight"] = straight_acceptance
-
-    shifted_results, shifted_acceptance = _can_construct_shifted(hand)
-    # print_result(shifted_results)
-    away = len(shifted_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Shifted")
-    results["Shifted"] = shifted_results
-    acceptance["Shifted"] = shifted_acceptance
-
-    triple_chows_results, triple_chow_acceptance = _can_construct_triple_chows(hand)
-    # print_result(triple_chows_results)
-    away = len(triple_chows_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Triple chows")
-    results["Triple chows"] = triple_chows_results
-    acceptance["Triple chows"] = triple_chow_acceptance
-
-    pure_straight_results, pure_straight_acceptance = _can_construct_pure_straight(hand)
-    # print_result(pure_straight_results)
-    away = len(pure_straight_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Pure straight")
-    results["Pure straight"] = pure_straight_results
-    acceptance["Pure straight"] = pure_straight_acceptance
-
-    pure_shifted_results, pure_shifted_acceptance = _can_construct_pure_shifted(hand)
-    # print_result(pure_shifted_results)
-    away = len(pure_shifted_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Pure shifted")
-    results["Pure shifted"] = pure_shifted_results
-    acceptance["Pure shifted"] = pure_shifted_acceptance
-
-    seven_pairs_results, seven_pairs_acceptance = _can_construct_seven_pairs(hand)
-    # print_result(seven_pairs_results)
-    away = len(seven_pairs_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Seven pairs")
-    results["Seven pairs"] = seven_pairs_results
-    acceptance["Seven pairs"] = seven_pairs_acceptance
-
-    all_pungs_results, all_pungs_acceptance = _can_construct_all_pungs(hand)
-    # print_result(all_pungs_results)
-    away = len(all_pungs_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("All pungs")
-    results["All pungs"] = all_pungs_results
-    acceptance["All pungs"] = all_pungs_acceptance
-
-    half_flush_results, half_flush_acceptance = _can_construct_half_flush(hand)
-    # print_result(half_flush_results)
-    away = len(half_flush_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("Half flush")
-    results["Half flush"] = half_flush_results
-    acceptance["Half flush"] = half_flush_acceptance
-
-    all_types_results, all_types_acceptance = _can_construct_all_types(hand)
-    # print_result(all_types_results)
-    away = len(all_types_results[0][1])
-    if away <= closest_away:
-        if away < closest_away:
-            best_results.clear()
-            closest_away = away
-        best_results.append("All types")
-    results["All types"] = all_types_results
-    acceptance["All types"] = all_types_acceptance
+    for hand_type in HandType:
+        hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand)
+        away = len(hand_results[0][1])
+        if away <= closest_away:
+            if away < closest_away:
+                best_results.clear()
+                closest_away = away
+            best_results.append(hand_type.value)
+        results[hand_type.value] = hand_results
+        acceptance[hand_type.value] = hand_acceptance
 
     to_display = results.keys() if display_all else best_results
     printed_result = f'Analyzed hand : {hand}\n'
