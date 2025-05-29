@@ -31,7 +31,7 @@ def _are_constraints_respected(group: MahjongGroup, constraints: list[Constraint
                 if any(not tile.is_compatible_with_half_flush(Family.CIRCLE) for tile in group):
                     return False
             case Constraint.FLUSH_CHARACTER:
-                if any(not tile.is_compatible_with_half_flush(Family.BAMBOO) for tile in group):
+                if any(not tile.is_compatible_with_half_flush(Family.CHARACTER) for tile in group):
                     return False
             case Constraint.FIRST_FOUR:
                 if any(tile.number > 4 or tile.is_honor() for tile in group):
