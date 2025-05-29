@@ -13,8 +13,9 @@
     function sendData() {
       const input = document.getElementById("textInput").value;
       const checkbox = document.getElementById("checkBox").checked;
+      const startTime = performance.now();
 
-      fetch('http://localhost:5000/calculate-tile-acceptance', {
+      fetch('/calculate-tile-acceptance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input, checkbox })
@@ -24,7 +25,9 @@
       if (!response.ok) {
         throw new Error(data.error || 'Unknown error');
       }
-      document.getElementById("result").innerText = data.result;
+      const endTime = performance.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
+      document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${data.result}`;
     })
     .catch(error => {
       document.getElementById("result").innerText = "Error: " + error.message;
