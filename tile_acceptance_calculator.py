@@ -425,16 +425,23 @@ def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
     return result, acceptance
 
 
+def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles):
+    honors = get_tiles_from_family(most_useless_tiles, Family.HONOR)
+    if honors:
+        return honors[0]
+    return sorted(most_useless_tiles, key=lambda tile: abs(5 - tile.number))[-1]
+
+
 def _print_best_discard_choice(best_results, results):
     tile_count = Counter()
     for best_result in best_results:
         for _, residue in results[best_result]:
             tile_count.update(residue)
-    most_useless_tiles = tile_count.most_common(1)
-    if most_useless_tiles:
-        return f"Tile to discard next: {most_useless_tiles[0][0]}\n"
-    return '\n'
-
+    if not tile_count:
+        return '\n'
+    highest_count = tile_count.most_common(1)[0][1]
+    most_useless_tiles = [tile for tile, count in tile_count.items() if count == highest_count]
+    return f"Tile to discard next: {_get_most_useless_tile_from(most_useless_tiles)}\n"
 
 
 def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
@@ -495,7 +502,7 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
-    # random_hand = MahjongHand(parse_tiles("1234789p1356m667s"))
+    # random_hand = MahjongHand(parse_tiles("24m34556778s1279p"))
     print(analyze_hand(random_hand, display_all=False))
     #from timeit import default_timer as timer
     #start = timer()
