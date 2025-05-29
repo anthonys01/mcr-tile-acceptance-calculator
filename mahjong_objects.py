@@ -18,6 +18,7 @@ class Constraint(Enum):
     """
         tile group constraints
     """
+    NONE = auto()
     ORDINARY = auto()
     NO_HONOR = auto()
     FULL_TERMINALS = auto()
@@ -136,7 +137,30 @@ MahjongTiles = list[MahjongTile]
 MahjongGroup = tuple[MahjongTile, ...]
 MahjongGroups = tuple[MahjongGroup, ...]
 MahjongCombination = tuple[MahjongGroups, MahjongTiles]
-MahjongGroupAndResidue = tuple[MahjongGroup, MahjongTiles]
+MahjongGroupAndResidue = tuple[MahjongGroup, MahjongTiles, list[Constraint]]
+
+class MahjongGroupInstance:
+    """
+        represent a mahjong proto-group
+    """
+    def __init__(self, group: tuple):
+        self.group = group
+        self.possible_full_groups: dict[Constraint, list[MahjongGroup]] = {}
+
+    def __str__(self):
+        return str(self.group)
+
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        return isinstance(other, MahjongGroupInstance) and other.group == self.group
+
+    def __hash__(self):
+        return hash(self.group)
+
+    def __lt__(self, other):
+        return self.group < other.group
 
 class MahjongHand:
     """

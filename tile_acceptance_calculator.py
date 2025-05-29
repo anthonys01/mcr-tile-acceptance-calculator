@@ -3,7 +3,8 @@
 """
 from itertools import chain
 
-from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple
+from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple, \
+    all_groups_for_with_constraints
 from mahjong_objects import MahjongTiles, MahjongTile, Family, MahjongHand, MahjongGroup, Constraint, \
     get_tiles_from_family, parse_tiles, generate_random_closed_hand, MahjongGroups, MahjongCombination
 from pattern_generator import pattern_generator
@@ -70,32 +71,46 @@ def _can_construct_all_pungs(hand: MahjongHand):
     return all_groups, acceptance
 
 def _can_construct_half_flush(hand: MahjongHand):
+    best_combinations: dict[Constraint, list[MahjongCombination]] = {Constraint.FLUSH_BAMBOO: [],
+                                                               Constraint.FLUSH_CIRCLE: [],
+                                                               Constraint.FLUSH_CHARACTER: []}
+    for nb_seq in range(0, 5):
+        for constraint, combinations in all_groups_for_with_constraints(hand.hand_tiles, nb_seq, 4 - nb_seq, 1,
+                    [Constraint.FLUSH_CHARACTER, Constraint.FLUSH_CIRCLE, Constraint.FLUSH_BAMBOO]).items():
+            best_combinations[constraint] += combinations
+
     best_groups = []
-    for constraint in [Constraint.FLUSH_CHARACTER, Constraint.FLUSH_BAMBOO, Constraint.FLUSH_CIRCLE]:
-        for nb_seq in range(0, 5):
-            best_groups += all_groups_for(hand.hand_tiles, nb_seq, 4 - nb_seq, 1, [constraint])
+    best_shanten = 14
+    for constraint, combinations in best_combinations.items():
+        if not combinations:
+            continue
+        real_shanten = min(len(residue) for group, residue in combinations)
+        if real_shanten > best_shanten:
+            continue
+        if real_shanten < best_shanten:
+            best_groups.clear()
+            best_shanten = real_shanten
+        best_groups += [(groups, residue) for groups, residue in combinations if len(residue) == best_shanten]
+
     if not best_groups:
         print("Too far away")
         return [], []
-    real_shanten = min(len(residue) for group, residue in best_groups)
-    groups_to_return = []
+
     acceptance = set()
     has_empty_group = False
     for best_group, residue in best_groups:
-        if len(residue) == real_shanten:
-            groups_to_return.append((best_group, residue))
-            acceptance.update(_get_tile_acceptance_of_groups(best_group))
-            if _has_empty_group(best_group):
-                has_empty_group = True
+        acceptance.update(_get_tile_acceptance_of_groups(best_group))
+        if _has_empty_group(best_group):
+            has_empty_group = True
     if has_empty_group:
-        family = groups_to_return[0][0][0].family
+        family = best_groups[0][0][0].family
         for tile in parse_tiles('123456789' + family.value):
             if tile not in acceptance and hand.hand_tiles.count(tile) < 4:
                 acceptance.add(tile)
         for tile in parse_tiles('1234567z'):
             if tile not in acceptance and hand.hand_tiles.count(tile) < 2:
                 acceptance.add(tile)
-    return groups_to_return, acceptance
+    return best_groups, acceptance
 
 def _has_empty_group(groups):
     for group in groups:
@@ -127,7 +142,8 @@ def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, a
         good_groups = [(tuple([()]), tiles)]
     else:
         smallest_residue_length = 13
-        for group, residue in chain(find_sequences(tiles), find_three_of_a_kind(tiles)):
+        for group, residue, _ in chain(find_sequences(tiles, [Constraint.NONE]),
+                                       find_three_of_a_kind(tiles, [Constraint.NONE])):
             residue_length = len(residue)
             if residue_length > smallest_residue_length:
                 continue
@@ -416,4 +432,12 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
+    # random_hand = MahjongHand(parse_tiles("134679s123p1122z"))
     print(analyze_hand(random_hand, display_all=True))
+    #from timeit import default_timer as timer
+    #start = timer()
+    #for _ in range(10):
+    #    random_hand = generate_random_closed_hand(2)
+    #    print(analyze_hand(random_hand, display_all=True))
+    #end = timer()
+    #print(end - start)
