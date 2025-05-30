@@ -359,7 +359,7 @@ def _can_construct_knitted(hand: MahjongHand):
         tiles = hand.get_residue_after(combi)
         for tile in missing:
             combi.remove(tile)
-        usable_honor_tiles = tuple(get_tiles_from_family(tiles, Family.HONOR))
+        usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
         leftover = list(tiles)
         for tile in usable_honor_tiles:
             leftover.remove(tile)
@@ -367,7 +367,7 @@ def _can_construct_knitted(hand: MahjongHand):
         if shanten < best_shanten:
             best_shanten = shanten
             best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi)
-            best_result = [((usable_honor_tiles,), leftover)]
+            best_result = [((tuple(usable_honor_tiles),), leftover)]
             best_acceptance = missing
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[tuple[[list[MahjongGroup], MahjongTiles]]] = []
@@ -506,4 +506,5 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
     # random_hand = MahjongHand(parse_tiles("24m34556778s1379p"))
+    # random_hand = MahjongHand(parse_tiles("2s3489m1489p1336z"))
     print(analyze_hand_from_string_and_print(str(random_hand), display_all=False))
