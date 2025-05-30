@@ -4,7 +4,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from tile_acceptance_calculator import analyze_hand_from_string
+from tile_acceptance_calculator import analyze_hand_from_string_and_print
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +20,7 @@ def calculate_tile_acceptance():
     display_all = data.get('checkbox')
 
     try:
-        return jsonify({'result': analyze_hand_from_string(user_hand, display_all)})
+        return jsonify({'result': analyze_hand_from_string_and_print(user_hand, display_all)})
     except Exception as e: # pylint: disable=broad-exception-caught
         return jsonify({'error': str(e)}), 500
 

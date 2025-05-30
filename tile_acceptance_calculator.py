@@ -440,12 +440,11 @@ def _precompute_constraints(hand):
     return dict(best_combinations)
 
 
-def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
+def analyze_hand(hand: MahjongHand, hand_types=None):
     """
     analyze given mahjong hand for each supported hand type
     :param hand: hand to analyze
     :param hand_types: list all hand types to analyze, if specified
-    :param display_all: if False, only show the hand types closest to victory
     :return: a string containing the analysis
     """
     if len(hand.hand_tiles) < 13:
@@ -475,6 +474,22 @@ def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
         results[hand_type.value] = hand_results
         acceptance[hand_type.value] = hand_acceptance
 
+    return results, acceptance, best_results
+
+
+def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
+    """
+    parse hand, analyze it for each supported hand type and print result
+    :param hand: hand to parse and analyze
+    :param display_all: if False, only show the hand types closest to victory
+    :return: a string containing the analysis
+    """
+    mahjong_hand = MahjongHand(parse_tiles(hand.lower()))
+    results, acceptance, best_results = analyze_hand(mahjong_hand)
+    return _print_hand_analysis(mahjong_hand, results, acceptance, best_results, display_all)
+
+
+def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -> str:
     to_display = results.keys() if display_all else best_results
     printed_result = f'Analyzed hand : {hand}\n'
     for result_type in to_display:
@@ -482,30 +497,13 @@ def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
         printed_result += result_type + '\n'
         printed_result += _print_result(results[result_type])
         printed_result += "Tile acceptance " + str(sorted(acceptance[result_type])) + \
-              f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
+                          f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
     printed_result += '-----------------------------\n'
     printed_result += _print_best_discard_choice(best_results, results)
     return printed_result
 
 
-def analyze_hand_from_string(hand: str, display_all=False) -> str:
-    """
-    parse hand and analyze it for each supported hand type
-    :param hand: hand to parse and analyze
-    :param display_all: if False, only show the hand types closest to victory
-    :return: a string containing the analysis
-    """
-    return analyze_hand(MahjongHand(parse_tiles(hand.lower())), display_all=display_all)
-
-
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
     # random_hand = MahjongHand(parse_tiles("24m34556778s1379p"))
-    print(analyze_hand(random_hand, display_all=False))
-    #from timeit import default_timer as timer
-    #start = timer()
-    #for _ in range(10):
-    #    random_hand = generate_random_closed_hand(2)
-    #    print(analyze_hand(random_hand, display_all=True))
-    #end = timer()
-    #print(end - start)
+    print(analyze_hand_from_string_and_print(str(random_hand), display_all=False))
