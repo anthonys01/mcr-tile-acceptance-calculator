@@ -1,6 +1,7 @@
 """
     functions to find all the best groups (that minimize the number of tiles away)
 """
+from bisect import insort
 from collections import Counter, defaultdict
 from typing import Iterator
 
@@ -143,24 +144,22 @@ def find_three_of_a_kind(tiles: MahjongTiles,
     :param constraints: constraints to respect
     :return: an iterator returning tuples of proto-groups and residue tiles
     """
-    for family in Family:
-        family_tiles = get_tiles_from_family(tiles, family)
-        count = Counter(tile.number for tile in family_tiles)
-        for current_tile, tile_count in count.items():
-            if tile_count >= 3:
-                new_group = _get_group([current_tile] * 3, family)
-                respected_constraints = _get_respected_constraints(new_group, constraints)
-                if respected_constraints:
-                    yield new_group, _get_group_residue(new_group, tiles), respected_constraints
-            if tile_count >= 2:
-                new_group = _get_group([current_tile] * 2, family)
-                respected_constraints = _get_respected_constraints(new_group, constraints)
-                if respected_constraints:
-                    yield new_group, _get_group_residue(new_group, tiles), respected_constraints
-            new_group = _get_group([current_tile], family)
+    count = Counter(tiles)
+    for current_tile, tile_count in count.items():
+        if tile_count >= 3:
+            new_group = (current_tile, current_tile, current_tile)
             respected_constraints = _get_respected_constraints(new_group, constraints)
             if respected_constraints:
                 yield new_group, _get_group_residue(new_group, tiles), respected_constraints
+        if tile_count >= 2:
+            new_group = (current_tile, current_tile)
+            respected_constraints = _get_respected_constraints(new_group, constraints)
+            if respected_constraints:
+                yield new_group, _get_group_residue(new_group, tiles), respected_constraints
+        new_group = (current_tile,)
+        respected_constraints = _get_respected_constraints(new_group, constraints)
+        if respected_constraints:
+            yield new_group, _get_group_residue(new_group, tiles), respected_constraints
 
 
 def find_pair(tiles: MahjongTiles,
@@ -171,20 +170,18 @@ def find_pair(tiles: MahjongTiles,
     :param constraints: constraints to respect
     :return: an iterator returning tuples of proto-groups and residue tiles
     """
-    for family in Family:
-        family_tiles = get_tiles_from_family(tiles, family)
-        count = Counter(tile.number for tile in family_tiles)
-        for current_tile, tile_count in count.items():
-            if tile_count >= 2:
-                new_group = _get_group([current_tile] * 2, family)
-                respected_constraints = _get_respected_constraints(new_group, constraints)
-                if respected_constraints:
-                    yield new_group, _get_group_residue(new_group, tiles), respected_constraints
-            else:
-                new_group = _get_group([current_tile], family)
-                respected_constraints = _get_respected_constraints(new_group, constraints)
-                if respected_constraints:
-                    yield new_group, _get_group_residue(new_group, tiles), respected_constraints
+    count = Counter(tiles)
+    for current_tile, tile_count in count.items():
+        if tile_count >= 2:
+            new_group = (current_tile, current_tile)
+            respected_constraints = _get_respected_constraints(new_group, constraints)
+            if respected_constraints:
+                yield new_group, _get_group_residue(new_group, tiles), respected_constraints
+        else:
+            new_group = (current_tile,)
+            respected_constraints = _get_respected_constraints(new_group, constraints)
+            if respected_constraints:
+                yield new_group, _get_group_residue(new_group, tiles), respected_constraints
 
 
 def all_groups_for(tiles: MahjongTiles,
@@ -224,7 +221,9 @@ def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> Ma
     :param new_group: new group
     :return: sortable tuple of groups
     """
-    return tuple(sorted(list(group_tuple) + [new_group]))
+    sorted_groups = list(group_tuple)
+    insort(sorted_groups, new_group)
+    return tuple(sorted_groups)
 
 
 def _find_group_and_recurse(found_groups: Iterator[MahjongGroupAndResidue],
@@ -240,7 +239,7 @@ def _find_group_and_recurse(found_groups: Iterator[MahjongGroupAndResidue],
 
         if new_sequence == 0 and new_three_same == 0 and new_pair == 0:
             for constraint in respected_constraints:
-                possible_combinations[constraint].append((tuple([found_group]), residue))
+                possible_combinations[constraint].append(((found_group,), residue))
         else:
             for constraint, combinations in _find_all_groups_for(residue, new_sequence, new_three_same, new_pair,
                                                         respected_constraints, cache, new_match).items():

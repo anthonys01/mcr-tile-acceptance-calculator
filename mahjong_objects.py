@@ -130,7 +130,7 @@ class MahjongTile:
         return str(self)
 
     def __lt__(self, other):
-        return self.family.value < other.family.value or self.family == other.family and self.number < other.number
+        return self.family == other.family and self.number < other.number or self.family.value < other.family.value
 
 
 MahjongTiles = list[MahjongTile]

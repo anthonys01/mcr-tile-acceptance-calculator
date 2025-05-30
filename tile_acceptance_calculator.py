@@ -177,7 +177,7 @@ def _can_construct_all_types(hand: MahjongHand):
 def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, acceptance):
     good_groups = []
     if not tiles:
-        good_groups = [(tuple([()]), tiles)]
+        good_groups = [(((),), tiles)]
     else:
         smallest_residue_length = 13
         for group, residue, _ in chain(find_sequences(tiles, [Constraint.NONE]),
@@ -188,7 +188,7 @@ def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, a
             if residue_length < smallest_residue_length:
                 smallest_residue_length = len(residue)
                 good_groups.clear()
-            good_groups.append((tuple([group]), residue))
+            good_groups.append(((group,), residue))
     acceptance = _get_full_tile_acceptance(tiles, good_groups,
                                            other_acceptance=acceptance, allowed_tiles=all_valid_tiles)
     if not concatenated_results:
@@ -359,7 +359,7 @@ def _can_construct_knitted(hand: MahjongHand):
         tiles = hand.get_residue_after(combi)
         for tile in missing:
             combi.remove(tile)
-        usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
+        usable_honor_tiles = tuple(get_tiles_from_family(tiles, Family.HONOR))
         leftover = list(tiles)
         for tile in usable_honor_tiles:
             leftover.remove(tile)
@@ -368,7 +368,7 @@ def _can_construct_knitted(hand: MahjongHand):
             best_shanten = shanten
             best_combi = _get_read_groups_from_full_groups(combi,
                                         (tuple(orig_combi[:3]), tuple(orig_combi[3:6]), tuple(orig_combi[6:])))
-            best_result = [(tuple([tuple(usable_honor_tiles)]), leftover)]
+            best_result = [((usable_honor_tiles,), leftover)]
             best_acceptance = missing
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[tuple[[list[MahjongGroup], MahjongTiles]]] = []
