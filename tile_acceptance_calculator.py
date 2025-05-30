@@ -6,12 +6,12 @@ from enum import Enum
 from itertools import chain
 
 from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple, \
-    all_groups_for_with_constraints
+    all_groups_for_with_constraints, find_simple_waits_for_two_tiles
 from mahjong_objects import MahjongTiles, MahjongTile, Family, MahjongHand, MahjongGroup, Constraint, \
     MahjongGroups, MahjongCombination, get_tiles_from_family
 from pattern_generator import pattern_generator
 from tiles_utils import FAMILY_TILES, HONOR_TILES, FIRST_FOUR_TILES, LAST_FOUR_TILES, \
-    WINDS_TILES, DRAGONS_TILES, parse_tiles, generate_random_closed_hand
+    WINDS_TILES, DRAGONS_TILES, parse_tiles, generate_random_closed_hand, SYMMETRIC_TILES
 
 
 class HandType(Enum):
@@ -29,6 +29,7 @@ class HandType(Enum):
     ALL_TYPES = "All Types"
     KNITTED = "Knitted"
     FIRST_OR_LAST_N_TILES = "First or Last n tiles"
+    SYMMETRY = "Symmetry"
 
 
 def _get_read_groups_from_combi_tiles(hand_tiles: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
@@ -80,17 +81,6 @@ def _can_construct_all_pungs(hand: MahjongHand):
     return all_groups, acceptance
 
 
-def _can_construct_half_flush(hand: MahjongHand):
-    best_combinations: dict[Constraint, list[MahjongCombination]] = {Constraint.FLUSH_BAMBOO: [],
-                                                                     Constraint.FLUSH_CIRCLE: [],
-                                                                     Constraint.FLUSH_CHARACTER: []}
-    for nb_seq in range(0, 5):
-        for constraint, combinations in all_groups_for_with_constraints(hand.hand_tiles, nb_seq, 4 - nb_seq, 1,
-                    [Constraint.FLUSH_CHARACTER, Constraint.FLUSH_CIRCLE, Constraint.FLUSH_BAMBOO]).items():
-            best_combinations[constraint] += combinations
-    return _can_construct_half_flush_from_precomputed(hand, best_combinations)
-
-
 def _can_construct_half_flush_from_precomputed(hand: MahjongHand,
                                                precomputed: dict[Constraint, list[MahjongCombination]]):
     best_groups = _get_best_groups_from_multiple_constraints(
@@ -100,7 +90,9 @@ def _can_construct_half_flush_from_precomputed(hand: MahjongHand,
         print("Too far away")
         return [], []
 
-    return best_groups, _get_half_flush_acceptance(hand, best_groups)
+    family = _find_example_tile(best_groups[0]).family
+    return best_groups, _get_full_tile_acceptance(hand.hand_tiles, best_groups,
+                                                  allowed_tiles=FAMILY_TILES[family] + HONOR_TILES)
 
 
 def _get_best_groups_from_multiple_constraints(constraints, precomputed):
@@ -121,24 +113,8 @@ def _get_best_groups_from_multiple_constraints(constraints, precomputed):
     return best_groups
 
 
-def _get_half_flush_acceptance(hand, best_groups):
-    family = _find_example_tile(best_groups[0]).family
-    return _get_full_tile_acceptance(hand.hand_tiles, best_groups,
-                                     allowed_tiles=FAMILY_TILES[family] + HONOR_TILES)
-
-
 def _has_empty_group(groups):
     return any(len(group) == 0 for group in groups)
-
-
-def _can_construct_first_last_hand(hand: MahjongHand):
-    best_combinations: dict[Constraint, list[MahjongCombination]] = {Constraint.FIRST_FOUR: [],
-                                                                     Constraint.LAST_FOUR: []}
-    for nb_seq in range(0, 5):
-        for constraint, combinations in all_groups_for_with_constraints(hand.hand_tiles, nb_seq, 4 - nb_seq, 1,
-                                                    [Constraint.FIRST_FOUR, Constraint.LAST_FOUR]).items():
-            best_combinations[constraint] += combinations
-    return _can_construct_first_last_hand_from_precomputed(hand, best_combinations)
 
 
 def _find_example_tile(combination: MahjongCombination) -> MahjongTile:
@@ -166,6 +142,17 @@ def _can_construct_first_last_hand_from_precomputed(hand: MahjongHand,
         return [], []
 
     return best_groups, _get_first_last_tile_acceptance(hand, best_groups)
+
+
+def _can_construct_symmetry_from_precomputed(hand: MahjongHand,
+                                               precomputed: dict[Constraint, list[MahjongCombination]]):
+    best_groups = _get_best_groups_from_multiple_constraints([Constraint.SYMMETRIC], precomputed)
+
+    if not best_groups:
+        print("Too far away")
+        return [], []
+
+    return best_groups, _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=SYMMETRIC_TILES)
 
 
 def _can_construct_all_types(hand: MahjongHand):
@@ -284,21 +271,6 @@ def _is_pair(group: MahjongGroup) -> bool:
     return len(group) == 2 and group[0] == group[1]
 
 
-def _find_simple_waits(group: MahjongGroup) -> set[MahjongTile]:
-    tile1, tile2 = min(group), max(group)
-    waits = set()
-    if tile1 == tile2:
-        waits.add(tile1)
-    elif tile2.number - tile1.number == 1:
-        if tile1.number > 1:
-            waits.add(MahjongTile(number=tile1.number - 1, family=tile1.family))
-        if tile2.number < 9:
-            waits.add(MahjongTile(number=tile2.number + 1, family=tile1.family))
-    elif tile2.number - tile1.number == 2:
-        waits.add(MahjongTile(number=(tile1.number + tile2.number)//2, family=tile1.family))
-    return waits
-
-
 def _get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
     acceptance = set()
     number_of_pairs = sum(_is_pair(group) for group in groups)
@@ -308,7 +280,7 @@ def _get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
         if len(group) == 2:
             if _is_pair(group) and number_of_pairs == 1:
                 continue
-            acceptance.update(_find_simple_waits(group))
+            acceptance.update(find_simple_waits_for_two_tiles(group))
         elif len(group) == 0:
             # not managed here
             continue
@@ -406,7 +378,7 @@ def _can_construct_knitted(hand: MahjongHand):
     return result_to_return, acceptance
 
 
-def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
+def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand, precomputed):
     result, acceptance = [], []
     match hand_type:
         case HandType.MIXED_SHIFTED:
@@ -424,13 +396,15 @@ def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand):
         case HandType.ALL_PUNGS:
             result, acceptance = _can_construct_all_pungs(hand)
         case HandType.HALF_FLUSH:
-            result, acceptance = _can_construct_half_flush(hand)
+            result, acceptance = _can_construct_half_flush_from_precomputed(hand, precomputed)
         case HandType.ALL_TYPES:
             result, acceptance = _can_construct_all_types(hand)
         case HandType.KNITTED:
             result, acceptance = _can_construct_knitted(hand)
         case HandType.FIRST_OR_LAST_N_TILES:
-            result, acceptance = _can_construct_first_last_hand(hand)
+            result, acceptance = _can_construct_first_last_hand_from_precomputed(hand, precomputed)
+        case HandType.SYMMETRY:
+            result, acceptance = _can_construct_symmetry_from_precomputed(hand, precomputed)
     return result, acceptance
 
 
@@ -453,6 +427,20 @@ def _print_best_discard_choice(best_results, results):
     return f"Tile to discard next: {_get_most_useless_tile_from(most_useless_tiles)}\n"
 
 
+def _precompute_constraints(hand):
+    constraints = [
+        Constraint.FLUSH_CHARACTER, Constraint.FLUSH_CIRCLE, Constraint.FLUSH_BAMBOO,
+        Constraint.FIRST_FOUR, Constraint.LAST_FOUR,
+        Constraint.SYMMETRIC
+    ]
+    best_combinations: dict[Constraint, list[MahjongCombination]] = {constraint: [] for constraint in constraints}
+    for nb_seq in range(0, 5):
+        for constraint, combinations in all_groups_for_with_constraints(hand.hand_tiles, nb_seq, 4 - nb_seq, 1,
+                                                                        constraints).items():
+            best_combinations[constraint] += combinations
+    return dict(best_combinations)
+
+
 def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
     """
     analyze given mahjong hand for each supported hand type
@@ -473,8 +461,10 @@ def analyze_hand(hand: MahjongHand, hand_types=None, display_all=False) -> str:
 
     acceptance = {}
 
+    precomputed = _precompute_constraints(hand)
+
     for hand_type in hand_types:
-        hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand)
+        hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand, precomputed)
         if not hand_results:
             continue
         away = len(hand_results[0][1])
@@ -511,8 +501,8 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
-    # random_hand = MahjongHand(parse_tiles("24m34556778s1279p"))
-    print(analyze_hand(random_hand, display_all=True))
+    # random_hand = MahjongHand(parse_tiles("23488p45689s1m55z"))
+    print(analyze_hand(random_hand, display_all=False))
     #from timeit import default_timer as timer
     #start = timer()
     #for _ in range(10):

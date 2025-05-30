@@ -12,11 +12,35 @@ from tiles_utils import parse_tiles
 def _get_group(numbers:list[int], family: Family) -> MahjongGroup:
     return tuple(MahjongTile(number=num, family=family) for num in numbers)
 
+
 def _get_group_residue(group: MahjongGroup, tiles: MahjongTiles) -> MahjongTiles:
     leftover = list(tiles)
     for group_tile in group:
         leftover.remove(group_tile)
     return leftover
+
+
+def find_simple_waits_for_two_tiles(group: MahjongGroup) -> set[MahjongTile]:
+    """
+    Find the waits of a two tiles group. If the group is smaller or greater, return an empty set
+    :param group: two tiles group
+    :return: the found waits
+    """
+    if len(group) != 2:
+        return set()
+    tile1, tile2 = min(group), max(group)
+    waits = set()
+    if tile1 == tile2:
+        waits.add(tile1)
+    elif tile2.number - tile1.number == 1:
+        if tile1.number > 1:
+            waits.add(MahjongTile(number=tile1.number - 1, family=tile1.family))
+        if tile2.number < 9:
+            waits.add(MahjongTile(number=tile2.number + 1, family=tile1.family))
+    elif tile2.number - tile1.number == 2:
+        waits.add(MahjongTile(number=(tile1.number + tile2.number)//2, family=tile1.family))
+    return waits
+
 
 # pylint: disable=too-many-branches
 def _get_respected_constraints(group: MahjongGroup, constraints: list[Constraint]) -> list[Constraint]:
@@ -54,7 +78,9 @@ def _get_respected_constraints(group: MahjongGroup, constraints: list[Constraint
                 if any(tile.number < 7 or tile.is_honor() for tile in group):
                     respected_constraints.remove(Constraint.LAST_THREE)
             case Constraint.SYMMETRIC:
-                if any(not tile.is_symmetric() for tile in group):
+                if any(not tile.is_symmetric() for tile in group) or \
+                        (waits := find_simple_waits_for_two_tiles(group)) and \
+                        all(not tile.is_symmetric() for tile in waits):
                     respected_constraints.remove(Constraint.SYMMETRIC)
             case Constraint.FULL_TERMINALS_OR_HONORS:
                 if any(not tile.is_honor() and not tile.is_terminal() for tile in group):
@@ -72,6 +98,7 @@ def _get_respected_constraints(group: MahjongGroup, constraints: list[Constraint
                 if any(not tile.is_green() for tile in group):
                     respected_constraints.remove(Constraint.GREEN)
     return respected_constraints
+
 
 def find_sequences(tiles: MahjongTiles,
                    constraints: list[Constraint]=None) -> Iterator[MahjongGroupAndResidue]:
@@ -107,6 +134,7 @@ def find_sequences(tiles: MahjongTiles,
             if respected_constraints:
                 yield new_group, _get_group_residue(new_group, tiles), respected_constraints
 
+
 def find_three_of_a_kind(tiles: MahjongTiles,
                          constraints: list[Constraint]=None) -> Iterator[MahjongGroupAndResidue]:
     """
@@ -134,6 +162,7 @@ def find_three_of_a_kind(tiles: MahjongTiles,
             if respected_constraints:
                 yield new_group, _get_group_residue(new_group, tiles), respected_constraints
 
+
 def find_pair(tiles: MahjongTiles,
               constraints: list[Constraint]=None) -> Iterator[MahjongGroupAndResidue]:
     """
@@ -157,6 +186,7 @@ def find_pair(tiles: MahjongTiles,
                 if respected_constraints:
                     yield new_group, _get_group_residue(new_group, tiles), respected_constraints
 
+
 def all_groups_for(tiles: MahjongTiles,
                    sequence: int, three_same: int, pair: int) -> list[MahjongCombination]:
     """
@@ -169,6 +199,7 @@ def all_groups_for(tiles: MahjongTiles,
     """
     return _find_all_groups_for(tiles, sequence, three_same, pair,
                                 [Constraint.NONE], set(), ())[Constraint.NONE]
+
 
 def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_same: int, pair: int,
                    constraints) -> dict[Constraint, list[MahjongCombination]]:
@@ -185,6 +216,7 @@ def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_sa
         raise AttributeError("Constraints cannot be None or empty")
     return _find_all_groups_for(tiles, sequence, three_same, pair, constraints, set(), ())
 
+
 def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> MahjongGroups:
     """
     merge a new group into a sortable tuple of groups
@@ -193,6 +225,7 @@ def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> Ma
     :return: sortable tuple of groups
     """
     return tuple(sorted(list(group_tuple) + [new_group]))
+
 
 def _find_group_and_recurse(found_groups: Iterator[MahjongGroupAndResidue],
                             new_sequence, new_three_same, new_pair,
