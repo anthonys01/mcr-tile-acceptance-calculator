@@ -6,7 +6,12 @@ from random import sample
 from mahjong_objects import MahjongTiles, Family, MahjongTile, MahjongHand
 
 
-def _generate_tile_pool(honor_tiles_multiplier=4) -> MahjongTiles:
+def generate_tile_pool(honor_tiles_multiplier=4) -> MahjongTiles:
+    """
+    generate the game tile pool
+    :param honor_tiles_multiplier: honor tile multiplier, 4 tiles is the default
+    :return: list of all tiles
+    """
     pool = []
     for number in range(1, 10):
         pool += [MahjongTile(number=number, family=Family.BAMBOO)] * 4
@@ -21,7 +26,7 @@ def generate_random_closed_hand(honor_tiles_multiplier=4):
     generate a random hand
     :return: hand
     """
-    pool = _generate_tile_pool(honor_tiles_multiplier)
+    pool = generate_tile_pool(honor_tiles_multiplier)
     return MahjongHand(sample(pool, 13))
 
 def parse_tiles(tiles: str) -> MahjongTiles:

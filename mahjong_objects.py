@@ -198,6 +198,20 @@ class MahjongHand:
                 current_hand.remove(tile)
         return current_hand
 
+    def draw(self, draw_tile: MahjongTile):
+        """
+        add tile to hand
+        :param draw_tile: tile to add
+        """
+        self.hand_tiles.append(draw_tile)
+
+    def discard(self, to_discard: MahjongTile):
+        """
+        remove tile from hand
+        :param to_discard: tile to remove
+        """
+        self.hand_tiles.remove(to_discard)
+
     def __str__(self):
         rep = ""
         for family in Family:

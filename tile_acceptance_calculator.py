@@ -87,7 +87,6 @@ def _can_construct_half_flush_from_precomputed(hand: MahjongHand,
         [Constraint.FLUSH_CHARACTER, Constraint.FLUSH_CIRCLE, Constraint.FLUSH_BAMBOO], precomputed)
 
     if not best_groups:
-        print("Too far away")
         return [], []
 
     family = _find_example_tile(best_groups[0]).family
@@ -138,7 +137,6 @@ def _can_construct_first_last_hand_from_precomputed(hand: MahjongHand,
     best_groups = _get_best_groups_from_multiple_constraints([Constraint.FIRST_FOUR, Constraint.LAST_FOUR], precomputed)
 
     if not best_groups:
-        print("Too far away")
         return [], []
 
     return best_groups, _get_first_last_tile_acceptance(hand, best_groups)
@@ -149,7 +147,6 @@ def _can_construct_symmetry_from_precomputed(hand: MahjongHand,
     best_groups = _get_best_groups_from_multiple_constraints([Constraint.SYMMETRIC], precomputed)
 
     if not best_groups:
-        print("Too far away")
         return [], []
 
     return best_groups, _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=SYMMETRIC_TILES)
@@ -415,15 +412,19 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles):
 
 
 def _print_best_discard_choice(best_results, results):
+    return f"Tile to discard next: {_get_best_discard_choice(best_results, results)}\n"
+
+
+def _get_best_discard_choice(best_results, results):
     tile_count = Counter()
     for best_result in best_results:
         for _, residue in results[best_result]:
             tile_count.update(residue)
     if not tile_count:
-        return '\n'
+        raise ValueError("No tile to discard")
     highest_count = tile_count.most_common(1)[0][1]
     most_useless_tiles = [tile for tile, count in tile_count.items() if count == highest_count]
-    return f"Tile to discard next: {_get_most_useless_tile_from(most_useless_tiles)}\n"
+    return _get_most_useless_tile_from(most_useless_tiles)
 
 
 def _precompute_constraints(hand):
@@ -474,7 +475,19 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
         results[hand_type.value] = hand_results
         acceptance[hand_type.value] = hand_acceptance
 
-    return results, acceptance, best_results
+    return results, acceptance, best_results, closest_away
+
+
+def get_tile_to_discard_from(hand: MahjongHand):
+    """
+    get the next tile to discard, and current number of tiles away after discard
+    :param hand: hand to analyze
+    :return: the tile to discard
+    """
+    if len(hand.hand_tiles) != 14:
+        raise AttributeError(f'Number of tiles not supported : {len(hand.hand_tiles)}')
+    results, _, best_results, nb_away = analyze_hand(hand)
+    return _get_best_discard_choice(best_results, results), nb_away - 1
 
 
 def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
@@ -485,7 +498,7 @@ def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
     :return: a string containing the analysis
     """
     mahjong_hand = MahjongHand(parse_tiles(hand.lower()))
-    results, acceptance, best_results = analyze_hand(mahjong_hand)
+    results, acceptance, best_results, _ = analyze_hand(mahjong_hand)
     return _print_hand_analysis(mahjong_hand, results, acceptance, best_results, display_all)
 
 
@@ -507,4 +520,5 @@ if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
     # random_hand = MahjongHand(parse_tiles("24m34556778s1379p"))
     # random_hand = MahjongHand(parse_tiles("2s3489m1489p1336z"))
-    print(analyze_hand_from_string_and_print(str(random_hand), display_all=False))
+    # random_hand = MahjongHand(parse_tiles("13889s288m2p24477z"))
+    print(analyze_hand_from_string_and_print(str(random_hand), display_all=True))

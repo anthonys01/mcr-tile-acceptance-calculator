@@ -194,8 +194,10 @@ def all_groups_for(tiles: MahjongTiles,
     :param pair: number of pairs to have
     :return: list of all combinations matching the requirements, and their residue tiles
     """
-    return _find_all_groups_for(tiles, sequence, three_same, pair,
-                                [Constraint.NONE], set(), ())[Constraint.NONE]
+    results = _find_all_groups_for(tiles, sequence, three_same, pair, [Constraint.NONE], set(), ())
+    if results:
+        return results[Constraint.NONE]
+    return []
 
 
 def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_same: int, pair: int,
