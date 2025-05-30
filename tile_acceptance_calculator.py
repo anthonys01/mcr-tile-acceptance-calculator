@@ -33,8 +33,8 @@ class HandType(Enum):
 
 
 def _get_read_groups_from_combi_tiles(hand_tiles: MahjongTiles, full_combination: MahjongTiles) -> list[MahjongGroup]:
-    combi_list = all_groups_for(full_combination, 3, 0, 0)
-    return _get_read_groups_from_full_groups(hand_tiles, combi_list[0][0])
+    return _get_read_groups_from_full_groups(hand_tiles, (
+        tuple(full_combination[:3]), tuple(full_combination[3:6]), tuple(full_combination[6:])))
 
 
 def _get_read_groups_from_full_groups(hand_tiles: MahjongTiles, groups: MahjongGroups) -> list[MahjongGroup]:
@@ -366,8 +366,7 @@ def _can_construct_knitted(hand: MahjongHand):
         shanten = len(leftover)
         if shanten < best_shanten:
             best_shanten = shanten
-            best_combi = _get_read_groups_from_full_groups(combi,
-                                        (tuple(orig_combi[:3]), tuple(orig_combi[3:6]), tuple(orig_combi[6:])))
+            best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi)
             best_result = [((usable_honor_tiles,), leftover)]
             best_acceptance = missing
     acceptance: set[MahjongTile] = set(best_acceptance)
@@ -501,7 +500,7 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
-    # random_hand = MahjongHand(parse_tiles("23488p45689s1m55z"))
+    # random_hand = MahjongHand(parse_tiles("24m34556778s1379p"))
     print(analyze_hand(random_hand, display_all=False))
     #from timeit import default_timer as timer
     #start = timer()
