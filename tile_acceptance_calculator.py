@@ -487,7 +487,7 @@ def get_tile_to_discard_from(hand: MahjongHand):
     if len(hand.hand_tiles) != 14:
         raise AttributeError(f'Number of tiles not supported : {len(hand.hand_tiles)}')
     results, _, best_results, nb_away = analyze_hand(hand)
-    return _get_best_discard_choice(best_results, results), nb_away - 1
+    return _get_best_discard_choice(best_results, results), nb_away - 1, best_results
 
 
 def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
