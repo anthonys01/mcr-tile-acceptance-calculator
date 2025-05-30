@@ -4,8 +4,9 @@
 from collections import Counter, defaultdict
 from typing import Iterator
 
-from mahjong_objects import MahjongGroup, Constraint, Family, MahjongTiles, get_tiles_from_family, MahjongTile, \
-    MahjongGroups, MahjongCombination, MahjongGroupAndResidue, parse_tiles
+from mahjong_objects import MahjongGroup, Constraint, Family, MahjongTiles, MahjongTile, \
+    MahjongGroups, MahjongCombination, MahjongGroupAndResidue, get_tiles_from_family
+from tiles_utils import parse_tiles
 
 
 def _get_group(numbers:list[int], family: Family) -> MahjongGroup:

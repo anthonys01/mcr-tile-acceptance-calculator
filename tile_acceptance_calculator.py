@@ -8,8 +8,10 @@ from itertools import chain
 from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple, \
     all_groups_for_with_constraints
 from mahjong_objects import MahjongTiles, MahjongTile, Family, MahjongHand, MahjongGroup, Constraint, \
-    get_tiles_from_family, parse_tiles, generate_random_closed_hand, MahjongGroups, MahjongCombination
+    MahjongGroups, MahjongCombination, get_tiles_from_family
 from pattern_generator import pattern_generator
+from tiles_utils import FAMILY_TILES, HONOR_TILES, FIRST_FOUR_TILES, LAST_FOUR_TILES, \
+    WINDS_TILES, DRAGONS_TILES, parse_tiles, generate_random_closed_hand
 
 
 class HandType(Enum):
@@ -122,7 +124,7 @@ def _get_best_groups_from_multiple_constraints(constraints, precomputed):
 def _get_half_flush_acceptance(hand, best_groups):
     family = _find_example_tile(best_groups[0]).family
     return _get_full_tile_acceptance(hand.hand_tiles, best_groups,
-                                     allowed_tiles=parse_tiles('123456789' + family.value + '1234567z'))
+                                     allowed_tiles=FAMILY_TILES[family] + HONOR_TILES)
 
 
 def _has_empty_group(groups):
@@ -148,12 +150,10 @@ def _find_example_tile(combination: MahjongCombination) -> MahjongTile:
 
 
 def _get_first_last_tile_acceptance(hand, best_groups):
-    first_four_tiles = parse_tiles('1234s1234m1234p')
-    last_four_tiles = parse_tiles('6789s6789p6789m')
-    if _find_example_tile(best_groups[0]) in first_four_tiles:
-        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=first_four_tiles)
-    if _find_example_tile(best_groups[0]) in last_four_tiles:
-        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=last_four_tiles)
+    if _find_example_tile(best_groups[0]) in FIRST_FOUR_TILES:
+        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=FIRST_FOUR_TILES)
+    if _find_example_tile(best_groups[0]) in LAST_FOUR_TILES:
+        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=LAST_FOUR_TILES)
     return set()
 
 
@@ -175,15 +175,15 @@ def _can_construct_all_types(hand: MahjongHand):
     for family in [Family.CIRCLE, Family.CHARACTER, Family.BAMBOO]:
         concatenated_results, acceptance = _find_groups_and_concatenate(
             get_tiles_from_family(hand.hand_tiles, family),
-            concatenated_results, parse_tiles('123456789' + family.value), acceptance)
+            concatenated_results, FAMILY_TILES[family], acceptance)
 
     tiles = get_tiles_from_family(hand.hand_tiles, Family.HONOR)
     concatenated_results, acceptance = _find_groups_and_concatenate(
         [tile for tile in tiles if tile.is_wind()],
-        concatenated_results, parse_tiles('1234z'), acceptance)
+        concatenated_results, WINDS_TILES, acceptance)
     concatenated_results, acceptance = _find_groups_and_concatenate(
         [tile for tile in tiles if tile.is_dragon()],
-        concatenated_results, parse_tiles('567z'), acceptance)
+        concatenated_results, DRAGONS_TILES, acceptance)
     return concatenated_results, acceptance
 
 
@@ -356,7 +356,6 @@ def _get_full_tile_acceptance(tiles_in_hand: MahjongTiles, combinations: list[Ma
     return acceptance
 
 
-
 def _can_construct_one_group_one_pair(tiles: MahjongTiles) -> tuple[int, list[MahjongCombination]]:
     best_groups: list[MahjongCombination] = all_groups_for(tiles, 0, 1, 1)
     best_groups += all_groups_for(tiles, 1, 0, 1)
@@ -402,7 +401,7 @@ def _can_construct_knitted(hand: MahjongHand):
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[tuple[[list[MahjongGroup], MahjongTiles]]] = []
     for groups, res in best_result:
-        acceptance.update(set(parse_tiles('1234567z')) - set(groups[0]))
+        acceptance.update(set(HONOR_TILES) - set(groups[0]))
         result_to_return.append((best_combi + list(groups), res))
     return result_to_return, acceptance
 
