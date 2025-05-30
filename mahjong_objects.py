@@ -49,7 +49,7 @@ class MahjongTile:
             self.family = Family(tile[1])
         else:
             self.number = number
-            self.family = family
+            self.family: Family = family
 
     def is_wind(self) -> bool:
         """

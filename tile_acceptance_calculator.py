@@ -120,28 +120,13 @@ def _get_best_groups_from_multiple_constraints(constraints, precomputed):
 
 
 def _get_half_flush_acceptance(hand, best_groups):
-    acceptance = set()
-    has_empty_group = False
-    for best_group, _ in best_groups:
-        acceptance.update(_get_tile_acceptance_of_groups(best_group))
-        if _has_empty_group(best_group):
-            has_empty_group = True
-    if has_empty_group:
-        family = best_groups[0][0][0].family
-        for tile in parse_tiles('123456789' + family.value):
-            if tile not in acceptance and hand.hand_tiles.count(tile) < 4:
-                acceptance.add(tile)
-        for tile in parse_tiles('1234567z'):
-            if tile not in acceptance and hand.hand_tiles.count(tile) < 2:
-                acceptance.add(tile)
-    return acceptance
+    family = _find_example_tile(best_groups[0]).family
+    return _get_full_tile_acceptance(hand.hand_tiles, best_groups,
+                                     allowed_tiles=parse_tiles('123456789' + family.value + '1234567z'))
 
 
 def _has_empty_group(groups):
-    for group in groups:
-        if len(group) == 0:
-            return True
-    return False
+    return any(len(group) == 0 for group in groups)
 
 
 def _can_construct_first_last_hand(hand: MahjongHand):
@@ -154,25 +139,22 @@ def _can_construct_first_last_hand(hand: MahjongHand):
     return _can_construct_first_last_hand_from_precomputed(hand, best_combinations)
 
 
+def _find_example_tile(combination: MahjongCombination) -> MahjongTile:
+    groups, _ = combination
+    for group in groups:
+        if group:
+            return group[0]
+    raise ValueError('All groups are empty')
+
+
 def _get_first_last_tile_acceptance(hand, best_groups):
-    acceptance = set()
-    has_empty_group = False
-    for best_group, _ in best_groups:
-        acceptance.update(_get_tile_acceptance_of_groups(best_group))
-        if _has_empty_group(best_group):
-            has_empty_group = True
-    if has_empty_group:
-        first_four_tiles = parse_tiles('1234s1234m1234p')
-        last_four_tiles = parse_tiles('6789s6789p6789m')
-        if best_groups[0][0][0].number in first_four_tiles:
-            for tile in first_four_tiles:
-                if tile not in acceptance and hand.hand_tiles.count(tile) < 4:
-                    acceptance.add(tile)
-        elif best_groups[0][0][0].number in last_four_tiles:
-            for tile in last_four_tiles:
-                if tile not in acceptance and hand.hand_tiles.count(tile) < 4:
-                    acceptance.add(tile)
-    return acceptance
+    first_four_tiles = parse_tiles('1234s1234m1234p')
+    last_four_tiles = parse_tiles('6789s6789p6789m')
+    if _find_example_tile(best_groups[0]) in first_four_tiles:
+        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=first_four_tiles)
+    if _find_example_tile(best_groups[0]) in last_four_tiles:
+        return _get_full_tile_acceptance(hand.hand_tiles, best_groups, allowed_tiles=last_four_tiles)
+    return set()
 
 
 def _can_construct_first_last_hand_from_precomputed(hand: MahjongHand,
@@ -220,11 +202,8 @@ def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, a
                 smallest_residue_length = len(residue)
                 good_groups.clear()
             good_groups.append((tuple([group]), residue))
-    for good_group_tuple, _ in good_groups:
-        if len(good_group_tuple[0]) == 0:
-            acceptance.update(all_valid_tiles)
-        else:
-            acceptance.update(_get_tile_acceptance_of_groups(good_group_tuple))
+    acceptance = _get_full_tile_acceptance(tiles, good_groups,
+                                           other_acceptance=acceptance, allowed_tiles=all_valid_tiles)
     if not concatenated_results:
         return good_groups, acceptance
 
@@ -345,6 +324,37 @@ def _get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
         else:
             acceptance.add(group[0])
     return acceptance
+
+def _get_full_tile_acceptance(tiles_in_hand: MahjongTiles, combinations: list[MahjongCombination],
+                              other_acceptance: set[MahjongTile]=None, allowed_tiles: MahjongTiles=None):
+    """
+    get tile acceptance of all proto-groups, and if there is an empty group, add all allowed tiles as acceptance
+    :param tiles_in_hand: tiles in hand
+    :param combinations: combinations to compute acceptance from
+    :param other_acceptance: previously calculated acceptance (i.e. from a main combination)
+    :param allowed_tiles: allowed tiles for empty group acceptance
+    :return: tile acceptance set
+    """
+    acceptance = set()
+    if other_acceptance:
+        acceptance.update(other_acceptance)
+    has_empty_group = False
+    for groups, _ in combinations:
+        acceptance.update(_get_tile_acceptance_of_groups(groups))
+        if _has_empty_group(groups):
+            has_empty_group = True
+    if allowed_tiles and has_empty_group:
+        honor_tiles = get_tiles_from_family(allowed_tiles, Family.HONOR)
+        for tile in honor_tiles:
+            if tile not in acceptance and tiles_in_hand.count(tile) < 2:
+                acceptance.add(tile)
+        for tile in set(allowed_tiles) - set(honor_tiles):
+            if tile not in acceptance and tiles_in_hand.count(tile) < 4:
+                acceptance.add(tile)
+    if allowed_tiles:
+        acceptance.intersection_update(allowed_tiles)
+    return acceptance
+
 
 
 def _can_construct_one_group_one_pair(tiles: MahjongTiles) -> tuple[int, list[MahjongCombination]]:
@@ -503,7 +513,7 @@ def analyze_hand_from_string(hand: str, display_all=False) -> str:
 if __name__ == "__main__":
     random_hand = generate_random_closed_hand(2)
     # random_hand = MahjongHand(parse_tiles("24m34556778s1279p"))
-    print(analyze_hand(random_hand, display_all=False))
+    print(analyze_hand(random_hand, display_all=True))
     #from timeit import default_timer as timer
     #start = timer()
     #for _ in range(10):
