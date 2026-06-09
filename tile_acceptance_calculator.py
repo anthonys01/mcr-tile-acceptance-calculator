@@ -3,6 +3,7 @@
 """
 from collections import Counter
 from enum import Enum
+from functools import lru_cache
 from itertools import chain
 
 from group_finder import all_groups_for, find_sequences, find_three_of_a_kind, merge_group_tuple, \
@@ -236,7 +237,7 @@ def _print_result(best_groups) -> str:
     return to_print
 
 
-def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str) -> \
+def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str, cache: dict) -> \
                                         tuple[list[tuple[[list[MahjongGroup], MahjongTiles]]], set[MahjongTile]]:
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
@@ -250,7 +251,7 @@ def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str) -
         tiles = hand.get_residue_after(combi)
         for tile in missing:
             combi.remove(tile)
-        shanten, result = _can_construct_one_group_one_pair(tiles)
+        shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
         if shanten < best_shanten:
             best_shanten = shanten
             best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi)
@@ -336,6 +337,14 @@ def _can_construct_one_group_one_pair(tiles: MahjongTiles) -> tuple[int, list[Ma
     return real_shanten, groups_to_return
 
 
+def _can_construct_one_group_one_pair_cached(tiles: MahjongTiles,
+                                             cache: dict) -> tuple[int, list[MahjongCombination]]:
+    key = tuple(sorted(t.index for t in tiles))
+    if key not in cache:
+        cache[key] = _can_construct_one_group_one_pair(tiles)
+    return cache[key]
+
+
 def _get_acceptance_tile_number(hand: MahjongHand, acceptance_tiles: MahjongTiles) -> int:
     total = 0
     for tile in acceptance_tiles:
@@ -374,19 +383,19 @@ def _can_construct_knitted(hand: MahjongHand):
     return result_to_return, acceptance
 
 
-def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand, precomputed):
+def _can_construct_hand_type(hand_type: HandType, hand: MahjongHand, precomputed, cache: dict):
     result, acceptance = [], []
     match hand_type:
         case HandType.MIXED_SHIFTED:
-            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaBCDbCDEc')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaBCDbCDEc', cache)
         case HandType.MIXED_STRAIGHT:
-            result, acceptance = _can_construct_with_3_group_pattern(hand, '123a456b789c')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, '123a456b789c', cache)
         case HandType.TRIPLE_CHOWS:
-            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaABCbABCc')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCaABCbABCc', cache)
         case HandType.PURE_SHIFTED:
-            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCCDEEFGa')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, 'ABCCDEEFGa', cache)
         case HandType.PURE_STRAIGHT:
-            result, acceptance = _can_construct_with_3_group_pattern(hand, '123456789a')
+            result, acceptance = _can_construct_with_3_group_pattern(hand, '123456789a', cache)
         case HandType.SEVEN_PAIRS:
             result, acceptance = _can_construct_seven_pairs(hand)
         case HandType.ALL_PUNGS:
@@ -473,9 +482,10 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
     acceptance = {}
 
     precomputed = _precompute_constraints(hand)
+    cache: dict = {}
 
     for hand_type in hand_types:
-        hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand, precomputed)
+        hand_results, hand_acceptance = _can_construct_hand_type(hand_type, hand, precomputed, cache)
         if not hand_results:
             continue
         away = len(hand_results[0][1])
