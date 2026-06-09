@@ -6,7 +6,8 @@ from collections import Counter, defaultdict
 from typing import Iterator
 
 from mahjong_objects import MahjongGroup, Constraint, Family, MahjongTiles, MahjongTile, \
-    MahjongGroups, MahjongCombination, MahjongGroupAndResidue, get_tiles_from_family
+    MahjongGroups, MahjongCombination, MahjongGroupAndResidue, get_tiles_from_family, \
+    INDEX_TO_TILE, NB_TILE_INDICES
 from tiles_utils import parse_tiles
 
 
@@ -203,10 +204,9 @@ def all_groups_for(tiles: MahjongTiles,
     :param pair: number of pairs to have
     :return: list of all combinations matching the requirements, and their residue tiles
     """
-    results = _find_all_groups_for(tiles, sequence, three_same, pair, [Constraint.NONE], set(), ())
-    if results:
-        return results[Constraint.NONE]
-    return []
+    counts, order, total = _prepare_counts(tiles)
+    raw = _recurse_none(counts, total, order, sequence, three_same, pair, set(), ())
+    return _finalize_combinations(tiles, counts, raw)
 
 
 def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_same: int, pair: int,
@@ -222,7 +222,11 @@ def all_groups_for_with_constraints(tiles: MahjongTiles, sequence: int, three_sa
     """
     if not constraints:
         raise AttributeError("Constraints cannot be None or empty")
-    return _find_all_groups_for(tiles, sequence, three_same, pair, constraints, set(), ())
+    counts, order, total = _prepare_counts(tiles)
+    raw = _recurse_counts(counts, total, order,
+                          sequence, three_same, pair, constraints, set(), ())
+    return {constraint: _finalize_combinations(tiles, counts, combinations)
+            for constraint, combinations in raw.items()}
 
 
 def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> MahjongGroups:
@@ -237,51 +241,244 @@ def merge_group_tuple(group_tuple: MahjongGroups, new_group: MahjongGroup) -> Ma
     return tuple(sorted_groups)
 
 
-def _find_group_and_recurse(found_groups: Iterator[MahjongGroupAndResidue],
-                            new_sequence, new_three_same, new_pair,
-                            cache, previous_context):
-    possible_combinations: dict[Constraint, list[MahjongCombination]] = defaultdict(list)
-    smallest_leftovers: dict[Constraint, int] = defaultdict(lambda: 14)
-    for found_group, residue, respected_constraints in found_groups:
-        new_match = merge_group_tuple(previous_context, found_group)
-        if new_match in cache:
-            continue
-        cache.add(new_match)
+def _encode_group_id(indices: tuple[int, ...]) -> int:
+    """Encode a proto-group (its ascending tile indices) into a unique small int.
 
-        if new_sequence == 0 and new_three_same == 0 and new_pair == 0:
-            for constraint in respected_constraints:
-                possible_combinations[constraint].append(((found_group,), residue))
+    Used as a cheap, order-independent dedup key for the set of chosen groups,
+    avoiding the cost of building/hashing tuples of tile tuples."""
+    value = 0
+    for index in indices:
+        value = value * 34 + index + 1
+    return value
+
+
+def _insort_id(context_ids: tuple[int, ...], group_id: int) -> tuple[int, ...]:
+    """Insert a group id into a sorted tuple of ids (canonical set key)."""
+    ids = list(context_ids)
+    insort(ids, group_id)
+    return tuple(ids)
+
+
+# families ordered as in the original find_sequences (bamboo, circle, character);
+# value is the count-vector offset of number 1 for that family
+_SEQUENCE_FAMILY_OFFSETS = (18, 9, 0)
+
+
+def _prepare_counts(tiles: MahjongTiles) -> tuple[list[int], list[int], int]:
+    """Build the count vector and the first-occurrence order of distinct tile indices."""
+    counts = [0] * NB_TILE_INDICES
+    order: list[int] = []
+    for tile in tiles:
+        index = tile.index
+        if counts[index] == 0:
+            order.append(index)
+        counts[index] += 1
+    return counts, order, len(tiles)
+
+
+def _materialize_residue(original_tiles: MahjongTiles, counts: list[int]) -> MahjongTiles:
+    """Rebuild the residue tile list in the original tile order from a count vector.
+
+    This reproduces exactly the list obtained by repeatedly removing group tiles
+    while preserving order (the previous list.remove based behaviour)."""
+    budget = list(counts)
+    residue: MahjongTiles = []
+    for tile in original_tiles:
+        index = tile.index
+        if budget[index] > 0:
+            budget[index] -= 1
+            residue.append(tile)
+    return residue
+
+
+def _finalize_combinations(original_tiles: MahjongTiles, counts: list[int],
+                           raw: list[tuple[MahjongGroups, int]]) -> list[MahjongCombination]:
+    """Turn (groups, residue_size) combinations into (groups, residue_tiles).
+
+    The residue is rebuilt only for the kept combinations, instead of at every leaf
+    of the search. ``counts`` is the full hand count vector (restored after the
+    search), temporarily mutated here to recover each residue in original order."""
+    result: list[MahjongCombination] = []
+    for groups, _residue_size in raw:
+        for group in groups:
+            for tile in group:
+                counts[tile.index] -= 1
+        result.append((groups, _materialize_residue(original_tiles, counts)))
+        for group in groups:
+            for tile in group:
+                counts[tile.index] += 1
+    return result
+
+
+def _iter_sequence_groups(counts: list[int]) -> Iterator[tuple[tuple[int, ...], MahjongGroup]]:
+    """Yield sequence-type proto-groups (3-run, partial runs, single) as (indices, group).
+
+    Mirrors find_sequences: families in (bamboo, circle, character) order, ascending
+    numbers 1..7, yielding the full run, the two partial runs then the single tile."""
+    for offset in _SEQUENCE_FAMILY_OFFSETS:
+        for base in range(offset, offset + 7):  # numbers 1..7
+            if counts[base] == 0:
+                continue
+            has_plus_one = counts[base + 1] > 0
+            has_plus_two = counts[base + 2] > 0
+            if has_plus_one and has_plus_two:
+                indices = (base, base + 1, base + 2)
+                yield indices, (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 1], INDEX_TO_TILE[base + 2])
+            if has_plus_one:
+                yield (base, base + 1), (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 1])
+            if has_plus_two:
+                yield (base, base + 2), (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 2])
+            yield (base,), (INDEX_TO_TILE[base],)
+
+
+def _iter_three_of_a_kind_groups(counts: list[int],
+                                 order: list[int]) -> Iterator[tuple[tuple[int, ...], MahjongGroup]]:
+    """Yield triplet/pair/single proto-groups, in first-occurrence order (like Counter)."""
+    for index in order:
+        count = counts[index]
+        if count == 0:
+            continue
+        tile = INDEX_TO_TILE[index]
+        if count >= 3:
+            yield (index, index, index), (tile, tile, tile)
+        if count >= 2:
+            yield (index, index), (tile, tile)
+        yield (index,), (tile,)
+
+
+def _iter_pair_groups(counts: list[int],
+                      order: list[int]) -> Iterator[tuple[tuple[int, ...], MahjongGroup]]:
+    """Yield pair/single proto-groups, in first-occurrence order (like Counter)."""
+    for index in order:
+        count = counts[index]
+        if count == 0:
+            continue
+        tile = INDEX_TO_TILE[index]
+        if count >= 2:
+            yield (index, index), (tile, tile)
         else:
-            for constraint, combinations in _find_all_groups_for(residue, new_sequence, new_three_same, new_pair,
-                                                        respected_constraints, cache, new_match).items():
-                for best_group, res in combinations:
-                    residue_size = len(res)
+            yield (index,), (tile,)
+
+
+def _recurse_none(counts: list[int], total: int, order: list[int],
+                  sequence: int, three_same: int, pair: int,
+                  cache: set, context_ids: tuple[int, ...]) -> list[tuple[MahjongGroups, int]]:
+    """Unconstrained variant of _recurse_counts.
+
+    Since the only constraint is Constraint.NONE (always respected), this skips the
+    per-group constraint check and the constraint-keyed dictionaries entirely, which
+    is the bulk of the workload (all pungs, seven pairs, chow patterns...).
+
+    Combinations carry the residue *size* only; the residue tile list is rebuilt
+    later by _finalize_combinations for the kept results."""
+    needed_tiles = 3 * (sequence + three_same) + 2 * pair
+    if total < needed_tiles - 1:
+        raise AttributeError(f'Not enough tiles, need at least {needed_tiles - 1} tiles')
+
+    if pair > 0:
+        iterator = _iter_pair_groups(counts, order)
+        new_sequence, new_three_same, new_pair = sequence, three_same, pair - 1
+    elif sequence > 0:
+        iterator = _iter_sequence_groups(counts)
+        new_sequence, new_three_same, new_pair = sequence - 1, three_same, pair
+    elif three_same > 0:
+        iterator = _iter_three_of_a_kind_groups(counts, order)
+        new_sequence, new_three_same, new_pair = sequence, three_same - 1, pair
+    else:
+        return []
+
+    is_leaf = new_sequence == 0 and new_three_same == 0 and new_pair == 0
+    combinations: list[tuple[MahjongGroups, int]] = []
+    smallest_leftover = 14
+
+    for indices, found_group in iterator:
+        new_ids = _insort_id(context_ids, _encode_group_id(indices))
+        if new_ids in cache:
+            continue
+        cache.add(new_ids)
+
+        for index in indices:
+            counts[index] -= 1
+
+        if is_leaf:
+            combinations.append(((found_group,), total - len(indices)))
+        else:
+            child = _recurse_none(counts, total - len(indices), order,
+                                  new_sequence, new_three_same, new_pair, cache, new_ids)
+            for best_group, residue_size in child:
+                if residue_size > smallest_leftover:
+                    continue
+                if residue_size < smallest_leftover:
+                    combinations.clear()
+                    smallest_leftover = residue_size
+                combinations.append((merge_group_tuple(best_group, found_group), residue_size))
+
+        for index in indices:
+            counts[index] += 1
+
+    return combinations
+
+
+def _recurse_counts(counts: list[int], total: int, order: list[int],
+                    sequence: int, three_same: int, pair: int, constraints,
+                    cache: set, context_ids: tuple[int, ...]) -> dict[Constraint, list[tuple[MahjongGroups, int]]]:
+    needed_tiles = 3 * (sequence + three_same) + 2 * pair
+    if total < needed_tiles - 1:
+        raise AttributeError(f'Not enough tiles, need at least {needed_tiles - 1} tiles')
+
+    # pick the next group kind to expand, matching the original priority order
+    if pair > 0:
+        iterator = _iter_pair_groups(counts, order)
+        new_sequence, new_three_same, new_pair = sequence, three_same, pair - 1
+    elif sequence > 0:
+        iterator = _iter_sequence_groups(counts)
+        new_sequence, new_three_same, new_pair = sequence - 1, three_same, pair
+    elif three_same > 0:
+        iterator = _iter_three_of_a_kind_groups(counts, order)
+        new_sequence, new_three_same, new_pair = sequence, three_same - 1, pair
+    else:
+        return {}
+
+    is_leaf = new_sequence == 0 and new_three_same == 0 and new_pair == 0
+    possible_combinations: dict[Constraint, list[tuple[MahjongGroups, int]]] = defaultdict(list)
+    smallest_leftovers: dict[Constraint, int] = defaultdict(lambda: 14)
+
+    for indices, found_group in iterator:
+        respected_constraints = _get_respected_constraints(found_group, constraints)
+        if not respected_constraints:
+            continue
+        new_ids = _insort_id(context_ids, _encode_group_id(indices))
+        if new_ids in cache:
+            continue
+        cache.add(new_ids)
+
+        for index in indices:
+            counts[index] -= 1
+
+        if is_leaf:
+            residue_size = total - len(indices)
+            for constraint in respected_constraints:
+                possible_combinations[constraint].append(((found_group,), residue_size))
+        else:
+            child = _recurse_counts(counts, total - len(indices), order,
+                                    new_sequence, new_three_same, new_pair,
+                                    respected_constraints, cache, new_ids)
+            for constraint, combinations in child.items():
+                for best_group, residue_size in combinations:
                     if residue_size > smallest_leftovers[constraint]:
                         continue
                     if residue_size < smallest_leftovers[constraint]:
                         possible_combinations[constraint].clear()
                         smallest_leftovers[constraint] = residue_size
-                    possible_combinations[constraint].append((merge_group_tuple(best_group, found_group), res))
+                    possible_combinations[constraint].append(
+                        (merge_group_tuple(best_group, found_group), residue_size))
+
+        for index in indices:
+            counts[index] += 1
+
     return dict(possible_combinations)
 
 
-def _find_all_groups_for(tiles: MahjongTiles,
-                         sequence: int, three_same: int, pair: int, constraints,
-                         cache, previous_context) -> dict[Constraint, list[MahjongCombination]]:
-    needed_tiles = 3 * (sequence + three_same) + 2 * pair
-    if len(tiles) < needed_tiles - 1:
-        raise AttributeError(f'Not enough tiles, need at least {needed_tiles - 1} tiles')
-
-    if pair > 0:
-        return _find_group_and_recurse(find_pair(tiles, constraints),
-                                       sequence, three_same, pair - 1, cache, previous_context)
-    if sequence > 0:
-        return _find_group_and_recurse(find_sequences(tiles, constraints),
-                                       sequence - 1, three_same, pair, cache, previous_context)
-    if three_same > 0:
-        return _find_group_and_recurse(find_three_of_a_kind(tiles, constraints),
-                                       sequence, three_same - 1, pair, cache, previous_context)
-    return {}
 
 
 if __name__ == "__main__":

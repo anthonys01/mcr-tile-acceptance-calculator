@@ -42,6 +42,10 @@ class Constraint(Enum):
 _SYMMETRIC_STR = {"5z", "1p", "2p", "3p", "4p", "5p", "8p", "9p", "2s", "4s", "5s", "6s", "8s", "9s"}
 _GREEN_STR = {"6z", "2s", "3s", "4s", "6s", "8s"}
 
+# count-vector indexing: 0-8 = 1m-9m, 9-17 = 1p-9p, 18-26 = 1s-9s, 27-33 = 1z-7z
+_FAMILY_OFFSET = {"m": 0, "p": 9, "s": 18, "z": 27}
+NB_TILE_INDICES = 34
+
 
 class MahjongTile:
     """
@@ -51,7 +55,7 @@ class MahjongTile:
         are guaranteed to be the same object. This makes equality an identity check
         and lets us precompute the hash and all the boolean predicates once.
     """
-    __slots__ = ("number", "family", "_str", "_hash", "_order",
+    __slots__ = ("number", "family", "_str", "_hash", "index",
                  "_is_honor", "_is_wind", "_is_dragon",
                  "_is_symmetric", "_is_green", "_is_even",
                  "_is_terminal", "_is_ordinary")
@@ -72,9 +76,9 @@ class MahjongTile:
         obj.family = family
         obj._str = f"{number}{family.value}"
         obj._hash = hash(key)
-        # precomputed total-order key: family char then number, matching the
-        # original __lt__ semantics, but without touching the (slow) Enum API
-        obj._order = ord(family.value) * 10 + number
+        # count-vector index (0..33); it also encodes the total order m<p<s<z
+        # then ascending number, matching the original __lt__ semantics
+        obj.index = _FAMILY_OFFSET[family.value] + number - 1
 
         is_honor = family == Family.HONOR
         obj._is_honor = is_honor
@@ -167,7 +171,7 @@ class MahjongTile:
         return self._str
 
     def __lt__(self, other):
-        return self._order < other._order
+        return self.index < other.index
 
 
 MahjongTiles = list[MahjongTile]
@@ -273,3 +277,22 @@ def get_tiles_from_family(tiles: MahjongTiles, family: Family):
         if tile.family == family:
             found.append(tile)
     return found
+
+
+def _build_index_table() -> tuple:
+    table = []
+    for index in range(NB_TILE_INDICES):
+        if index < 27:
+            family = (Family.CHARACTER, Family.CIRCLE, Family.BAMBOO)[index // 9]
+            number = index % 9 + 1
+        else:
+            family = Family.HONOR
+            number = index - 27 + 1
+        table.append(MahjongTile(number=number, family=family))
+    return tuple(table)
+
+
+# index (0..33) -> interned MahjongTile
+INDEX_TO_TILE: tuple = _build_index_table()
+
+
