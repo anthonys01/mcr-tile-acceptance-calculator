@@ -517,8 +517,11 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 
 
 if __name__ == "__main__":
-    random_hand = generate_random_closed_hand(2)
+    # random_hand = generate_random_closed_hand(2)
     # random_hand = MahjongHand(parse_tiles("24m34556778s1379p"))
     # random_hand = MahjongHand(parse_tiles("2s3489m1489p1336z"))
-    # random_hand = MahjongHand(parse_tiles("13889s288m2p24477z"))
+    import time
+    random_hand = MahjongHand(parse_tiles("13889s288m2p24477z"))
+    start = time.time()
     print(analyze_hand_from_string_and_print(str(random_hand), display_all=True))
+    print(time.time() - start)

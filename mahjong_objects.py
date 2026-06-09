@@ -39,38 +39,76 @@ class Constraint(Enum):
 
 
 
+_SYMMETRIC_STR = {"5z", "1p", "2p", "3p", "4p", "5p", "8p", "9p", "2s", "4s", "5s", "6s", "8s", "9s"}
+_GREEN_STR = {"6z", "2s", "3s", "4s", "6s", "8s"}
+
+
 class MahjongTile:
     """
         tile
+
+        Tiles are interned (flyweight): two tiles with the same number and family
+        are guaranteed to be the same object. This makes equality an identity check
+        and lets us precompute the hash and all the boolean predicates once.
     """
-    def __init__(self, tile: str=None, *, number: int=-1, family: Family=None):
+    __slots__ = ("number", "family", "_str", "_hash", "_order",
+                 "_is_honor", "_is_wind", "_is_dragon",
+                 "_is_symmetric", "_is_green", "_is_even",
+                 "_is_terminal", "_is_ordinary")
+
+    _cache: dict = {}
+
+    def __new__(cls, tile: str=None, *, number: int=-1, family: Family=None):
         if tile:
-            self.number = int(tile[0])
-            self.family = Family(tile[1])
-        else:
-            self.number = number
-            self.family: Family = family
+            number = int(tile[0])
+            family = Family(tile[1])
+        key = (number, family)
+        existing = cls._cache.get(key)
+        if existing is not None:
+            return existing
+
+        obj = super().__new__(cls)
+        obj.number = number
+        obj.family = family
+        obj._str = f"{number}{family.value}"
+        obj._hash = hash(key)
+        # precomputed total-order key: family char then number, matching the
+        # original __lt__ semantics, but without touching the (slow) Enum API
+        obj._order = ord(family.value) * 10 + number
+
+        is_honor = family == Family.HONOR
+        obj._is_honor = is_honor
+        obj._is_wind = is_honor and 1 <= number <= 4
+        obj._is_dragon = is_honor and 5 <= number <= 7
+        obj._is_symmetric = obj._str in _SYMMETRIC_STR
+        obj._is_green = obj._str in _GREEN_STR
+        obj._is_even = not is_honor and number % 2 == 0
+        obj._is_terminal = not is_honor and number in (1, 9)
+        obj._is_ordinary = not is_honor and 2 <= number <= 8
+
+        cls._cache[key] = obj
+        return obj
 
     def is_wind(self) -> bool:
         """
         is wind tile
         :return: true if wind
         """
-        return self.family == Family.HONOR and 1 <= self.number <= 4
+        return self._is_wind
 
     def is_dragon(self) -> bool:
         """
         is dragon tile
         :return: true if dragon
         """
-        return self.family == Family.HONOR and  5 <= self.number <= 7
+        return self._is_dragon
 
     def is_honor(self):
         """
         is an honor tile
         :return: True if honor tile
         """
-        return self.family == Family.HONOR
+        return self._is_honor
 
     def is_compatible_with_half_flush(self, family: Family):
         """
@@ -78,59 +116,58 @@ class MahjongTile:
         :param family: half flush family
         :return: true is compatible
         """
-        return self.family in (family, Family.HONOR)
+        return self.family is family or self._is_honor
 
     def is_symmetric(self):
         """
         is a symmetric tile
         :return: True if symmetric
         """
-        return str(self) in {"5z", "1p", "2p", "3p", "4p", "5p", "8p", "9p", "2s", "4s", "5s", "6s", "8s", "9s"}
+        return self._is_symmetric
 
     def is_green(self):
         """
         is a green tile
         :return: True if green
         """
-        return str(self) in {"6z", "2s", "3s", "4s", "6s", "8s"}
+        return self._is_green
 
     def is_even(self):
         """
         is an even tile
         :return: True if even
         """
-        return self.family != Family.HONOR and self.number % 2 == 0
+        return self._is_even
 
     def is_terminal(self):
         """
         is a terminal tile
         :return: True if terminal
         """
-        return self.family != Family.HONOR and self.number in (1, 9)
+        return self._is_terminal
 
     def is_ordinary(self):
         """
         is an ordinary tile
         :return: True if ordinary
         """
-        return self.family != Family.HONOR and 2 <= self.number <= 8
+        return self._is_ordinary
 
     def __eq__(self, other):
-        if isinstance(other, MahjongTile):
-            return self.number == other.number and self.family == other.family
-        return False
+        # tiles are interned, so identity is equivalent to equality
+        return self is other
 
     def __hash__(self):
-        return hash((self.number, self.family))
+        return self._hash
 
     def __str__(self):
-        return f"{self.number}{self.family.value}"
+        return self._str
 
     def __repr__(self):
-        return str(self)
+        return self._str
 
     def __lt__(self, other):
-        return self.family == other.family and self.number < other.number or self.family.value < other.family.value
+        return self._order < other._order
 
 
 MahjongTiles = list[MahjongTile]

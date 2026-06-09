@@ -48,6 +48,10 @@ def _get_respected_constraints(group: MahjongGroup, constraints: list[Constraint
     if not constraints:
         return []
 
+    # fast path for the very common unconstrained case
+    if len(constraints) == 1 and constraints[0] is Constraint.NONE:
+        return constraints
+
     respected_constraints = list(constraints)
 
     for constraint in constraints:
@@ -111,21 +115,26 @@ def find_sequences(tiles: MahjongTiles,
     """
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         family_tiles = get_tiles_from_family(tiles, family)
-        family_tiles_num = list(sorted(tile.number for tile in family_tiles))
+        if not family_tiles:
+            continue
+        family_tiles_num = sorted(tile.number for tile in family_tiles)
+        present = set(family_tiles_num)
         for current_tile in family_tiles_num:
             if current_tile > 7:
                 break
-            if current_tile + 1 in family_tiles_num and current_tile + 2 in family_tiles_num:
+            has_plus_one = current_tile + 1 in present
+            has_plus_two = current_tile + 2 in present
+            if has_plus_one and has_plus_two:
                 new_group = _get_group([current_tile, current_tile + 1, current_tile + 2], family)
                 respected_constraints = _get_respected_constraints(new_group, constraints)
                 if respected_constraints:
                     yield new_group, _get_group_residue(new_group, tiles), respected_constraints
-            if current_tile + 1 in family_tiles_num:
+            if has_plus_one:
                 new_group = _get_group([current_tile, current_tile + 1], family)
                 respected_constraints = _get_respected_constraints(new_group, constraints)
                 if respected_constraints:
                     yield new_group, _get_group_residue(new_group, tiles), respected_constraints
-            if current_tile + 2 in family_tiles_num:
+            if has_plus_two:
                 new_group = _get_group([current_tile, current_tile + 2], family)
                 respected_constraints = _get_respected_constraints(new_group, constraints)
                 if respected_constraints:
