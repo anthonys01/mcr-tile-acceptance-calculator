@@ -411,20 +411,32 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles):
     return sorted(most_useless_tiles, key=lambda tile: abs(5 - tile.number))[-1]
 
 
-def _print_best_discard_choice(best_results, results):
-    return f"Tile to discard next: {_get_best_discard_choice(best_results, results)}\n"
+def _print_best_discard_choice(best_results, results, acceptance, hand):
+    best_discard_tile, acceptance_after_discard = _get_best_discard_choice(best_results, results, acceptance, hand)
+    return f"Tile to discard next: {best_discard_tile} (acceptance: {acceptance_after_discard})\n"
 
 
-def _get_best_discard_choice(best_results, results):
-    tile_count = Counter()
+def _get_best_discard_choice(best_results, results, acceptance, hand):
+    # tile -> set union des acceptances de tous les types où elle est dans le résidu
+    candidate_acceptance: dict[MahjongTile, set] = {}
+
     for best_result in best_results:
+        hand_acceptance = acceptance[best_result]
         for _, residue in results[best_result]:
-            tile_count.update(residue)
-    if not tile_count:
+            for tile in set(residue):
+                if tile not in candidate_acceptance:
+                    candidate_acceptance[tile] = set()
+                candidate_acceptance[tile].update(hand_acceptance)  # union
+
+    if not candidate_acceptance:
         raise ValueError("No tile to discard")
-    highest_count = tile_count.most_common(1)[0][1]
-    most_useless_tiles = [tile for tile, count in tile_count.items() if count == highest_count]
-    return _get_most_useless_tile_from(most_useless_tiles)
+
+    # Comparer par nombre de tuiles acceptées (après union)
+    best_score = max(_get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values())
+    best_tiles = [tile for tile, acc in candidate_acceptance.items()
+                  if _get_acceptance_tile_number(hand, acc) == best_score]
+    to_discard = _get_most_useless_tile_from(best_tiles)
+    return to_discard, candidate_acceptance[to_discard]
 
 
 def _precompute_constraints(hand):
@@ -512,7 +524,7 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
         printed_result += "Tile acceptance " + str(sorted(acceptance[result_type])) + \
                           f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
     printed_result += '-----------------------------\n'
-    printed_result += _print_best_discard_choice(best_results, results)
+    printed_result += _print_best_discard_choice(best_results, results, acceptance, hand)
     return printed_result
 
 
