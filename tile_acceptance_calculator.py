@@ -52,6 +52,8 @@ def _get_read_groups_from_full_groups(hand_tiles: MahjongTiles, groups: MahjongG
 
 
 def _can_construct_seven_pairs(hand: MahjongHand):
+    if not hand.is_closed_hand():
+        return [[], list(hand.hand_tiles)], set()
     acceptance = set()
     all_groups = all_groups_for(hand.hand_tiles, 0, 0, 7)
     if all_groups:
@@ -64,6 +66,10 @@ def _can_construct_seven_pairs(hand: MahjongHand):
 
 
 def _can_construct_all_pungs(hand: MahjongHand):
+    if not hand.is_closed_hand():
+        for meld in hand.declared_tiles:
+            if len(meld) != 3 or meld[0] != meld[1] or meld[0] != meld[2]:
+                return [[], list(hand.hand_tiles)], set()
     acceptance = set()
     all_groups = all_groups_for(hand.hand_tiles, 0, 4, 1)
     if all_groups:
@@ -247,8 +253,7 @@ def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str, c
     for pattern in pattern_generator(input_pattern):
         orig_combi = parse_tiles(pattern)
         combi = list(orig_combi)
-        missing = hand.get_missing_tiles(combi)
-        tiles = hand.get_residue_after(combi)
+        missing, tiles = hand.get_missing_tiles_and_residue(combi)
         for tile in missing:
             combi.remove(tile)
         shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
@@ -361,8 +366,7 @@ def _can_construct_knitted(hand: MahjongHand):
     for pattern in pattern_generator('147a258b369c'):
         orig_combi = parse_tiles(pattern)
         combi = list(orig_combi)
-        missing = hand.get_missing_tiles(combi)
-        tiles = hand.get_residue_after(combi)
+        missing, tiles = hand.get_missing_tiles_and_residue(combi)
         for tile in missing:
             combi.remove(tile)
         usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
