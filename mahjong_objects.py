@@ -5,6 +5,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from itertools import combinations, permutations
+from typing import Iterable
+
 
 class Family(Enum):
     """
@@ -251,7 +253,7 @@ class MahjongHand:
             tiles.remove(self.drawn_tile)
         return tiles
 
-    def get_missing_tiles_and_residue(self, tiles: MahjongTiles) -> tuple[MahjongTiles, MahjongTiles]:
+    def get_missing_tiles_and_residue(self, tiles: Iterable[MahjongTile]) -> tuple[MahjongTiles, MahjongTiles]:
         """
         get missing tiles in hand for given tiles, and residue after that
         :param tiles: tiles to find

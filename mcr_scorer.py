@@ -6,7 +6,9 @@ from tile_acceptance_calculator import get_tile_acceptance_of_groups
 from tiles_utils import parse_tiles
 
 
-ORPHANS = parse_tiles('19s19p19m1234567z')
+ORPHANS = set(parse_tiles('19s19p19m1234567z'))
+
+HONORS = set(parse_tiles('1234567z'))
 
 
 def _get_all_tenpai_forms(hand: MahjongHand) -> tuple[list[MahjongGroups], list[MahjongGroups]]:
@@ -202,8 +204,62 @@ def _is_thirteen_orphans(hand):
 
 def _get_orphans_acceptance(hand: MahjongHand):
     hand_tiles = hand.get_tiles_without_last()
-    orphans_acceptance = set(ORPHANS).difference(hand_tiles)
+    orphans_acceptance = ORPHANS.difference(hand_tiles)
     return orphans_acceptance if orphans_acceptance else ORPHANS
+
+
+def _check_knitted(hand: MahjongHand) -> MahjongGroups:
+    honors_tiles = HONORS.intersection(hand.get_free_tiles())
+    if len(honors_tiles) >= 5 and hand.is_closed_hand():
+        _, knitted_tiles = hand.get_missing_tiles_and_residue(honors_tiles)
+        if _check_knitted_straight(knitted_tiles):
+            return tuple(knitted_tiles), tuple(honors_tiles)
+    if len(hand.declared_tiles.union(hand.kans)) > 1:
+        return ()
+    elif hand.is_closed_hand():
+        free_groups: list[MahjongCombination] = all_groups_for(hand.hand_tiles, 1, 0, 1) +\
+                                                all_groups_for(hand.hand_tiles, 1, 0, 1)
+        for groups, residue in free_groups:
+            if groups and len(groups[0]) == 2 and len(groups[1]) == 3 or len(groups[0]) == 3 and len(groups[1]) == 2:
+                if _check_knitted_straight(residue):
+                    return tuple(residue), groups[0], groups[1]
+    else:
+        group = list(hand.declared_tiles.union(hand.kans))[0]
+        for pairs, residue in all_groups_for(hand.get_free_tiles(), 0, 0, 1):
+            if pairs and len(pairs[0]) == 2:
+                if _check_knitted_straight(residue):
+                    return tuple(residue), pairs[0], group
+    return ()
+
+
+def _check_knitted_straight(knitted_tiles: list[MahjongTile]) -> bool:
+    limit = len(knitted_tiles)
+    if limit < 7 or limit > 9:
+        return False
+    families: list[list[MahjongTile]] = [[], [], []]
+    tiles_to_family = {1: families[0], 2: families[1], 3: families[2],
+                       4: families[0], 5: families[1], 6: families[2],
+                       7: families[0], 8: families[1], 9: families[2]}
+    for tile in knitted_tiles:
+        if tile.is_honor():
+            continue
+        tiles_to_family[tile.number].append(tile)
+
+    all_families = set()
+    for family in families:
+        if not family:
+            return False
+        f = family[0].family
+        all_families.add(f)
+        for tile in family:
+            if tile.family != f:
+                return False
+
+    if len(all_families) < 3:
+        return False
+
+    return sum(len(set(f)) for f in families) == limit
+
 
 def get_won_hand_yakus(hand, self_drawn: bool = False) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
     if not hand.needs_to_discard():
