@@ -220,6 +220,7 @@ class MahjongHand:
         self.hand_tiles: MahjongTiles = hand_tiles
         self.drawn_tile: MahjongTile = drawn_tile
         self.declared_tiles: set[MahjongGroup] = set()
+        self.kans: set[MahjongGroup] = set()
 
     def get_free_tiles(self) -> MahjongTiles:
         """
@@ -234,6 +235,15 @@ class MahjongHand:
 
     def is_closed_hand(self) -> bool:
         return not self.declared_tiles
+
+    def get_natural_size(self):
+        return 13 + len(self.kans)
+
+    def needs_to_discard(self):
+        return len(self.hand_tiles) == self.get_natural_size() + 1
+
+    def get_all_declared_groups(self) -> list[MahjongGroup]:
+        return list(self.declared_tiles.union(self.kans))
 
     def get_missing_tiles_and_residue(self, tiles: MahjongTiles) -> tuple[MahjongTiles, MahjongTiles]:
         """
@@ -312,6 +322,7 @@ class HandContext:
     all_tiles: list[MahjongTile]
     groups: tuple[MahjongGroup, ...]
     pair: MahjongGroup
+    acceptance: set[MahjongTile]
     chows: list[MahjongGroup]
     pungs: list[MahjongGroup]
     kongs: list[MahjongGroup]
@@ -951,7 +962,8 @@ def _check_no_honor(h: "HandContext") -> bool:
 
 def _check_edge_wait(h: "HandContext") -> bool:
     """Winning tile is the 3 of a 12X chow, or the 7 of an X89 chow."""
-    # TODO: fix
+    if len(h.acceptance) > 1:
+        return False
     wt = h.winning_tile
     for g in h.chows:
         if wt in g:
@@ -965,7 +977,8 @@ def _check_edge_wait(h: "HandContext") -> bool:
 
 def _check_closed_wait(h: "HandContext") -> bool:
     """Winning tile is the middle tile of its chow (kanchan wait)."""
-    # TODO: fix for kantan
+    if len(h.acceptance) > 1:
+        return False
     wt = h.winning_tile
     for g in h.chows:
         if wt in g:
@@ -977,8 +990,7 @@ def _check_closed_wait(h: "HandContext") -> bool:
 
 def _check_single_wait(h: "HandContext") -> bool:
     """Winning tile completes the pair (tanki wait)."""
-    # TODO: fix for nobetan
-    return h.winning_tile in h.pair
+    return len(h.acceptance) == 1 and h.winning_tile in h.pair
 
 
 def _check_self_drawn(h: "HandContext") -> bool:
@@ -996,7 +1008,7 @@ class MahjongMCRYaku(Enum):
     ALL_GREEN                = (3,  88, [],                   _check_all_green)
     NINE_GATES               = (4,  88, [22, 62, 73],         _check_not_implemented)
     FOUR_KONGS               = (5,  88, [48, 57, 67, 74, 79], _check_four_kongs)
-    SEVEN_SHIFTED_PAIRS      = (6,  88, [22, 62, 79],         _check_not_implemented)
+    SEVEN_SHIFTED_PAIRS      = (6,  88, [19, 22, 62, 79],     _check_not_implemented)
     THIRTEEN_ORPHANS         = (7,  88, [52, 62],             _check_not_implemented)
     ALL_TERMINALS            = (8,  64, [18, 49, 73, 76],     _check_all_terminals)
     LITTLE_FOUR_WINDS        = (9,  64, [38, 73],             _check_little_four_winds)

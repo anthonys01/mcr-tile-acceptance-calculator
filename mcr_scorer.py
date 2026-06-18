@@ -1,28 +1,46 @@
 
 from group_finder import all_groups_for
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile, HandContext, MahjongGroups, EAST, \
-    MahjongMCRYaku
+    MahjongMCRYaku, Family
+from tile_acceptance_calculator import get_tile_acceptance_of_groups
 from tiles_utils import parse_tiles
 
 
 def _get_all_tenpai_forms(hand: MahjongHand) -> tuple[list[MahjongGroups], list[MahjongGroups]]:
-    hand_size = len(hand.hand_tiles)
     tenpai_hands = []
     won_hands = []
-    for seq in range(5):
-        groups: list[MahjongCombination] = all_groups_for(hand.hand_tiles, seq, 4 - seq, 1)
-        for g, residue in groups:
-            if hand_size == 14:
+    declared_groups = hand.get_all_declared_groups()
+    max_free_groups = 4 - len(declared_groups)
+    for seq in range(max_free_groups + 1):
+        free_groups: list[MahjongCombination] = all_groups_for(hand.get_free_tiles(), seq, max_free_groups - seq, 1)
+        for g, residue in free_groups:
+            groups = declared_groups + list(g)
+            if hand.needs_to_discard():
                 if len(residue) == 0:
-                    won_hands.append(g)
+                    won_hands.append(groups)
                 elif len(residue) == 1:
-                    tenpai_hands.append(g)
+                    tenpai_hands.append(groups)
             elif len(residue) == 0:
-                tenpai_hands.append(g)
+                tenpai_hands.append(groups)
     return tenpai_hands, won_hands
 
 
-def _get_context(hand, won_hand):
+def _get_acceptance(won_hand: MahjongHand):
+    if not hand.needs_to_discard():
+        return set()
+    tenpai_hand = MahjongHand(list(won_hand.hand_tiles))
+    tenpai_hand.declared_tiles = set(won_hand.declared_tiles)
+    tenpai_hand.discard(won_hand.drawn_tile)
+    declared_groups = tenpai_hand.get_all_declared_groups()
+    tenpai_forms, _ = _get_all_tenpai_forms(tenpai_hand)
+    acceptance = set()
+    for groups in tenpai_forms:
+        free_groups = set(groups).difference(declared_groups)
+        acceptance.update(get_tile_acceptance_of_groups(tuple(free_groups)))
+    return acceptance
+
+
+def _get_context(hand, won_hand, acceptance):
     groups = []
     pair = None
     chows = []
@@ -53,11 +71,12 @@ def _get_context(hand, won_hand):
         families.add(group[0].family)
 
     return HandContext(hand.hand_tiles,
-                       tuple(groups), pair, chows, pungs, kongs, open_chows, open_pungs, open_kongs,
+                       tuple(groups), pair, acceptance,
+                       chows, pungs, kongs, open_chows, open_pungs, open_kongs,
                        families, False, hand.drawn_tile, EAST.number, EAST.number, False)
 
 
-def _get_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
+def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
     exclusions = set()
     results: dict[MahjongMCRYaku, int] = {}
 
@@ -69,6 +88,9 @@ def _get_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int
         if count:
             results[yaku] = count
             exclusions.update(yaku.get_exclusions())
+
+    if not results:
+        return [(MahjongMCRYaku.CHICKEN_HAND, 1)]
 
     # Fixed-point loop: re-check multi-occurrence yakus until no new firings
     changed = True
@@ -108,53 +130,120 @@ def _print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]):
     print(sep)
 
 
-if __name__ == '__main__':
-    hand = MahjongHand(parse_tiles("123456789p22333m"), MahjongTile("8p"))
-    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
-    if won_hands:
-        for won_hand in won_hands:
-            context = _get_context(hand, won_hand)
-            yakus = _get_hand_yakus(context)
-            # should be Pure Straight, Concealed Hand, No Honor, Closed Wait
-            _print_yakus(yakus)
+def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn):
+    compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.SEVEN_PAIRS, 1)]
+    families = set()
+    has_dragon = False
+    has_winds = False
+    has_terminals = False
+    has_ordinary = False
+    for pair in pairs:
+        families.add(pair[0].family)
+        if pair[0].family == Family.HONOR:
+            if pair[0].is_dragon():
+                has_dragon = True
+            else:
+                has_winds = True
+        elif pair[0].is_terminal():
+            has_terminals = True
+        else:
+            has_ordinary = True
 
+    if len(families) == 1:
+        if has_winds or has_dragon:
+            compatible_yakus.append((MahjongMCRYaku.ALL_HONORS, 1))
+        else:
+            sorted_nums = list(sorted(pair[0].number for pair in pairs))
+            if sorted_nums[0] == 1 and sorted_nums[-1] == 7 or\
+                    sorted_nums[0] == 2 and sorted_nums[-1] == 8 or\
+                    sorted_nums[0] == 3 and sorted_nums[-1] == 9:
+                compatible_yakus.clear()
+                compatible_yakus.append((MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1))
+            else:
+                compatible_yakus.append((MahjongMCRYaku.FULL_FLUSH, 1))
+    elif len(families) == 2:
+        if has_winds or has_dragon:
+            compatible_yakus.append((MahjongMCRYaku.HALF_FLUSH, 1))
+        else:
+            compatible_yakus.append((MahjongMCRYaku.ONE_VOIDED_SUIT, 1))
+            compatible_yakus.append((MahjongMCRYaku.NO_HONOR, 1))
+    elif len(families) == 3 and (has_winds or has_dragon):
+        compatible_yakus.append((MahjongMCRYaku.ONE_VOIDED_SUIT, 1))
+    elif len(families) == 4 and has_dragon and has_winds:
+        compatible_yakus.append((MahjongMCRYaku.ALL_TYPES, 1))
+
+    if (has_dragon or has_winds) and has_terminals and not has_ordinary:
+        compatible_yakus.append((MahjongMCRYaku.ALL_TERMINAL_AND_HONORS, 1))
+    elif not has_dragon and not has_winds and has_terminals and not has_ordinary:
+        compatible_yakus.append((MahjongMCRYaku.ALL_TERMINALS, 1))
+    elif not has_dragon and not has_winds and not has_terminals and has_ordinary:
+        compatible_yakus.append((MahjongMCRYaku.ALL_SIMPLE, 1))
+
+    unique_pairs = len(set(pairs))
+    if unique_pairs < 7:
+        compatible_yakus.append((MahjongMCRYaku.TILE_HOG, 7 - unique_pairs))
+
+    if self_drawn:
+        compatible_yakus.append((MahjongMCRYaku.FULLY_CONCEALED, 1))
+    return compatible_yakus
+
+
+def get_won_hand_yakus(hand, self_drawn: bool = False) -> tuple[MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
+    if not hand.needs_to_discard():
+        return (), []
+    acceptance = _get_acceptance(hand)
+    won_hands_scores = []
+    if hand.is_closed_hand() and not hand.kans:
+        # check pairs, knitted with honors and orphans
+        pairs: list[MahjongCombination] = all_groups_for(hand.get_free_tiles(), 0, 0, 7)
+        if pairs and not pairs[0][1]:
+            won_hands_scores.append(
+                (pairs[0][0], _get_yakus_compatible_with_seven_pairs(pairs[0][0], self_drawn)))
+    tenpai_hands, regular_won_hands = _get_all_tenpai_forms(hand)
+    if regular_won_hands:
+        for won_hand in regular_won_hands:
+            context = _get_context(hand, won_hand, acceptance)
+            won_hands_scores.append((won_hand, _get_standard_hand_yakus(context)))
+    best_pattern = max(won_hands_scores, key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]))
+    return best_pattern
+
+
+
+if __name__ == '__main__':
+    hand = MahjongHand(parse_tiles("123456789p22333m"), MahjongTile("2m"))
+    won, yakus = get_won_hand_yakus(hand)
+    _print_yakus(yakus)
 
     hand = MahjongHand(parse_tiles("123789p123m789s77z"), MahjongTile("7p"))
-    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
-    if won_hands:
-        for won_hand in won_hands:
-            context = _get_context(hand, won_hand)
-            yakus = _get_hand_yakus(context)
-            # should be Outside Hand, Concealed Hand, Mixed Double Chow x 2, Two Terminal Chows, Edge Wait
-            _print_yakus(yakus)
+    won, yakus = get_won_hand_yakus(hand)
+    # should be Outside Hand, Concealed Hand, Mixed Double Chow x 2, Two Terminal Chows, Edge Wait
+    _print_yakus(yakus)
 
     hand = MahjongHand(parse_tiles("11133p999s111777z"), MahjongTile("3p"))
     hand.declared_tiles.add((MahjongTile('1p'), MahjongTile('1p'), MahjongTile('1p')))
     hand.declared_tiles.add((MahjongTile('9s'), MahjongTile('9s'), MahjongTile('9s')))
-    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
-    if won_hands:
-        for won_hand in won_hands:
-            context = _get_context(hand, won_hand)
-            yakus = _get_hand_yakus(context)
-            # should be All Pungs, Dragon Pung, Prevalent Wind, Seat Wind, Two Concealed Pungs, Pung Of Terminal Or Honors x2, One Voided Suit, Single Wait
-            _print_yakus(yakus)
+    won, yakus = get_won_hand_yakus(hand)
+    # should be All Pungs, Dragon Pung, Prevalent Wind, Seat Wind, Two Concealed Pungs, Pung Of Terminal Or Honors x2, One Voided Suit, Single Wait
+    _print_yakus(yakus)
 
     hand = MahjongHand(parse_tiles("11133p111999s777z"), MahjongTile("3p"))
     hand.declared_tiles.add((MahjongTile('1p'), MahjongTile('1p'), MahjongTile('1p')))
     hand.declared_tiles.add((MahjongTile('9s'), MahjongTile('9s'), MahjongTile('9s')))
-    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
-    if won_hands:
-        for won_hand in won_hands:
-            context = _get_context(hand, won_hand)
-            yakus = _get_hand_yakus(context)
-            # should be All Pungs, Dragon Pung, Double Pungs, Two Concealed Pungs, Pung Of Terminal Or Honors x 3, One voided Suit, Single Wait
-            _print_yakus(yakus)
+    won, yakus = get_won_hand_yakus(hand)
+    # should be All Pungs, Dragon Pung, Double Pungs, Two Concealed Pungs, Pung Of Terminal Or Honors x 3, One voided Suit, Single Wait
+    _print_yakus(yakus)
 
     hand = MahjongHand(parse_tiles("222234444p23455s"), MahjongTile("2s"))
-    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
-    if won_hands:
-        for won_hand in won_hands:
-            context = _get_context(hand, won_hand)
-            yakus = _get_hand_yakus(context)
-            # should be Concealed Hand, Tile Hog x 2, Two Concealed Pungs, All Simple, Mixed Double Chow, One Voided Suit
-            _print_yakus(yakus)
+    won, yakus = get_won_hand_yakus(hand)
+    # should be Concealed Hand, Tile Hog x 2, Two Concealed Pungs, All Simple, Mixed Double Chow, One Voided Suit
+    _print_yakus(yakus)
+
+    hand = MahjongHand(parse_tiles("22334455667788s"), MahjongTile("2s"))
+    won, yakus = get_won_hand_yakus(hand)
+    # should be Seven Shifted Pairs, All Simple
+    _print_yakus(yakus)
+
+    hand = MahjongHand(parse_tiles("22223333444499s"), MahjongTile("2s"))
+    won, yakus = get_won_hand_yakus(hand)
+    # should be
+    _print_yakus(yakus)

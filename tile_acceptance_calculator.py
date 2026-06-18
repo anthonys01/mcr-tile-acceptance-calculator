@@ -265,7 +265,7 @@ def _can_construct_with_3_group_pattern(hand: MahjongHand, input_pattern: str, c
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[tuple[[list[MahjongGroup], MahjongTiles]]] = []
     for groups, res in best_result:
-        acceptance.update(_get_tile_acceptance_of_groups(groups))
+        acceptance.update(get_tile_acceptance_of_groups(groups))
         result_to_return.append((best_combi + list(groups), res))
     return result_to_return, acceptance
 
@@ -274,7 +274,7 @@ def _is_pair(group: MahjongGroup) -> bool:
     return len(group) == 2 and group[0] == group[1]
 
 
-def _get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
+def get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
     acceptance = set()
     number_of_pairs = sum(_is_pair(group) for group in groups)
     for group in groups:
@@ -315,7 +315,7 @@ def _get_full_tile_acceptance(tiles_in_hand: MahjongTiles, combinations: list[Ma
         acceptance.update(other_acceptance)
     has_empty_group = False
     for groups, _ in combinations:
-        acceptance.update(_get_tile_acceptance_of_groups(groups))
+        acceptance.update(get_tile_acceptance_of_groups(groups))
         if _has_empty_group(groups):
             has_empty_group = True
     if allowed_tiles and has_empty_group:
@@ -510,7 +510,7 @@ def get_tile_to_discard_from(hand: MahjongHand):
     :param hand: hand to analyze
     :return: the tile to discard
     """
-    if len(hand.hand_tiles) != 14:
+    if not hand.needs_to_discard():
         raise AttributeError(f'Number of tiles not supported : {len(hand.hand_tiles)}')
     results, _, best_results, nb_away = analyze_hand(hand)
     return _get_best_discard_choice(best_results, results), nb_away - 1, best_results
