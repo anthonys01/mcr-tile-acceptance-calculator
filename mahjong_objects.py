@@ -245,6 +245,12 @@ class MahjongHand:
     def get_all_declared_groups(self) -> list[MahjongGroup]:
         return list(self.declared_tiles.union(self.kans))
 
+    def get_tiles_without_last(self):
+        tiles = list(self.hand_tiles)
+        if self.drawn_tile:
+            tiles.remove(self.drawn_tile)
+        return tiles
+
     def get_missing_tiles_and_residue(self, tiles: MahjongTiles) -> tuple[MahjongTiles, MahjongTiles]:
         """
         get missing tiles in hand for given tiles, and residue after that
@@ -435,6 +441,10 @@ def _check_big_three_dragons(h: "HandContext") -> bool:
 
 def _check_all_green(h: "HandContext") -> bool:
     return all(t.is_green() for t in h.all_tiles)
+
+
+def _check_nine_gates(h: HandContext) -> bool:
+    return len(h.acceptance) == 9
 
 
 def _check_four_kongs(h: "HandContext") -> bool:
@@ -1006,7 +1016,7 @@ class MahjongMCRYaku(Enum):
     BIG_FOUR_WIND            = (1,  88, [38, 49, 60, 61, 73], _check_big_four_winds)
     BIG_THREE_DRAGON         = (2,  88, [54, 59],             _check_big_three_dragons)
     ALL_GREEN                = (3,  88, [],                   _check_all_green)
-    NINE_GATES               = (4,  88, [22, 62, 73],         _check_not_implemented)
+    NINE_GATES               = (4,  88, [22, 62, 73, 76],     _check_nine_gates)
     FOUR_KONGS               = (5,  88, [48, 57, 67, 74, 79], _check_four_kongs)
     SEVEN_SHIFTED_PAIRS      = (6,  88, [19, 22, 62, 79],     _check_not_implemented)
     THIRTEEN_ORPHANS         = (7,  88, [52, 62],             _check_not_implemented)
