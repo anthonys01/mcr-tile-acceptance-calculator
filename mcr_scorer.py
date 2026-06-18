@@ -11,8 +11,6 @@ def _get_all_tenpai_forms(hand: MahjongHand) -> tuple[list[MahjongGroups], list[
     won_hands = []
     for seq in range(5):
         groups: list[MahjongCombination] = all_groups_for(hand.hand_tiles, seq, 4 - seq, 1)
-        print(seq)
-        print(groups)
         for g, residue in groups:
             if hand_size == 14:
                 if len(residue) == 0:
@@ -59,23 +57,41 @@ def _get_context(hand, won_hand):
                        families, False, hand.drawn_tile, EAST.number, EAST.number, False)
 
 
-def _get_hand_yakus(hand_context: HandContext):
+def _get_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
     exclusions = set()
-    valid_yakus = []
+    results: dict[MahjongMCRYaku, int] = {}
+
+    # First pass: check every yaku once, accumulating counts
     for yaku in MahjongMCRYaku:
         if yaku in exclusions:
             continue
-        if yaku.check(hand_context):
-            valid_yakus.append(yaku)
+        count = yaku.check(hand_context)
+        if count:
+            results[yaku] = count
             exclusions.update(yaku.get_exclusions())
-    return valid_yakus
+
+    # Fixed-point loop: re-check multi-occurrence yakus until no new firings
+    changed = True
+    while changed:
+        changed = False
+        for yaku in MahjongMCRYaku:
+            if not yaku.is_multi() or yaku in exclusions:
+                continue
+            count = yaku.check(hand_context)
+            if count:
+                results[yaku] = results.get(yaku, 0) + count
+                changed = True
+
+    return list(results.items())
 
 
-def _print_yakus(yakus: list[MahjongMCRYaku]):
-    rows = [
-        (yaku.name.replace("_", " ").title(), yaku.get_points())
-        for yaku in yakus
-    ]
+def _print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]):
+    rows = []
+    for yaku, count in yakus:
+        name = yaku.name.replace("_", " ").title()
+        if count > 1:
+            name = f"{name} \u00d7{count}"
+        rows.append((name, yaku.get_points() * count))
     total = sum(points for _, points in rows)
     name_width = max([len("Yaku")] + [len(name) for name, _ in rows])
     points_width = max(
@@ -120,5 +136,25 @@ if __name__ == '__main__':
         for won_hand in won_hands:
             context = _get_context(hand, won_hand)
             yakus = _get_hand_yakus(context)
-            # should be All Pungs, Dragon Pung, Prevalent Wind, Seat Wind, Two Concealed Pungs, Pung Of Terminal Or Honors x 2, One voided Suit, Single Wait
+            # should be All Pungs, Dragon Pung, Prevalent Wind, Seat Wind, Two Concealed Pungs, Pung Of Terminal Or Honors x2, One Voided Suit, Single Wait
+            _print_yakus(yakus)
+
+    hand = MahjongHand(parse_tiles("11133p111999s777z"), MahjongTile("3p"))
+    hand.declared_tiles.add((MahjongTile('1p'), MahjongTile('1p'), MahjongTile('1p')))
+    hand.declared_tiles.add((MahjongTile('9s'), MahjongTile('9s'), MahjongTile('9s')))
+    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
+    if won_hands:
+        for won_hand in won_hands:
+            context = _get_context(hand, won_hand)
+            yakus = _get_hand_yakus(context)
+            # should be All Pungs, Dragon Pung, Double Pungs, Two Concealed Pungs, Pung Of Terminal Or Honors x 3, One voided Suit, Single Wait
+            _print_yakus(yakus)
+
+    hand = MahjongHand(parse_tiles("222234444p23455s"), MahjongTile("2s"))
+    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
+    if won_hands:
+        for won_hand in won_hands:
+            context = _get_context(hand, won_hand)
+            yakus = _get_hand_yakus(context)
+            # should be Concealed Hand, Tile Hog x 2, Two Concealed Pungs, All Simple, Mixed Double Chow, One Voided Suit
             _print_yakus(yakus)
