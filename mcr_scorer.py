@@ -94,10 +94,31 @@ def _print_yakus(yakus: list[MahjongMCRYaku]):
 
 if __name__ == '__main__':
     hand = MahjongHand(parse_tiles("123456789p22333m"), MahjongTile("8p"))
-    # normal hand types
     tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
     if won_hands:
         for won_hand in won_hands:
             context = _get_context(hand, won_hand)
             yakus = _get_hand_yakus(context)
+            # should be Pure Straight, Concealed Hand, No Honor, Closed Wait
+            _print_yakus(yakus)
+
+
+    hand = MahjongHand(parse_tiles("123789p123m789s77z"), MahjongTile("7p"))
+    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
+    if won_hands:
+        for won_hand in won_hands:
+            context = _get_context(hand, won_hand)
+            yakus = _get_hand_yakus(context)
+            # should be Outside Hand, Concealed Hand, Mixed Double Chow x 2, Two Terminal Chows, Edge Wait
+            _print_yakus(yakus)
+
+    hand = MahjongHand(parse_tiles("11133p999s111777z"), MahjongTile("3p"))
+    hand.declared_tiles.add((MahjongTile('1p'), MahjongTile('1p'), MahjongTile('1p')))
+    hand.declared_tiles.add((MahjongTile('9s'), MahjongTile('9s'), MahjongTile('9s')))
+    tenpai_hands, won_hands = _get_all_tenpai_forms(hand)
+    if won_hands:
+        for won_hand in won_hands:
+            context = _get_context(hand, won_hand)
+            yakus = _get_hand_yakus(context)
+            # should be All Pungs, Dragon Pung, Prevalent Wind, Seat Wind, Two Concealed Pungs, Pung Of Terminal Or Honors x 2, One voided Suit, Single Wait
             _print_yakus(yakus)
