@@ -175,6 +175,13 @@ class MahjongTile:
     def __lt__(self, other):
         return self.index < other.index
 
+EAST = MahjongTile('1z')
+SOUTH = MahjongTile('2z')
+WEST = MahjongTile('3z')
+NORTH = MahjongTile('4z')
+WHITE_DRAGON = MahjongTile('5z')
+GREEN_DRAGON = MahjongTile('6z')
+RED_DRAGON = MahjongTile('7z')
 
 MahjongTiles = list[MahjongTile]
 MahjongGroup = tuple[MahjongTile, ...]
@@ -212,7 +219,7 @@ class MahjongHand:
     def __init__(self, hand_tiles: MahjongTiles=None, drawn_tile: MahjongTile=None):
         self.hand_tiles: MahjongTiles = hand_tiles
         self.drawn_tile: MahjongTile = drawn_tile
-        self.declared_tiles: list[MahjongGroup] = []
+        self.declared_tiles: set[MahjongGroup] = set()
 
     def get_free_tiles(self) -> MahjongTiles:
         """
