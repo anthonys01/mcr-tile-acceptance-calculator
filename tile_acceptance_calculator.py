@@ -12,7 +12,7 @@ from mahjong_objects import MahjongTiles, MahjongTile, Family, MahjongHand, Mahj
     MahjongGroups, MahjongCombination, get_tiles_from_family
 from pattern_generator import pattern_generator
 from tiles_utils import FAMILY_TILES, HONOR_TILES, FIRST_FOUR_TILES, LAST_FOUR_TILES, \
-    WINDS_TILES, DRAGONS_TILES, parse_tiles, generate_random_closed_hand, SYMMETRIC_TILES
+    WINDS_TILES, DRAGONS_TILES, parse_tiles, generate_random_closed_hand, SYMMETRIC_TILES, parse_hand
 
 
 class HandType(Enum):
@@ -207,20 +207,20 @@ def _find_groups_and_concatenate(tiles, concatenated_results, all_valid_tiles, a
     return new_concatenated_results, acceptance
 
 
-def _print_shanten(best_groups) -> str:
+def _print_shanten(best_groups, natural_size) -> str:
     real_shanten = min(len(residue) for group, residue in best_groups)
     groups, residue = best_groups[0]
     nb_tiles = sum(len(group) for group in groups) + len(residue)
-    to_discard = nb_tiles - 13
-    if nb_tiles == 13:
+    to_discard = nb_tiles - natural_size
+    if nb_tiles == natural_size:
         return f"{real_shanten} away ({len(best_groups)} results)\n"
     return f"{real_shanten - to_discard} away with {to_discard} tile to discard ({len(best_groups)} results)\n"
 
 
-def _print_result(best_groups) -> str:
+def _print_result(best_groups, hand) -> str:
     if not best_groups:
         return "Too far away"
-    to_print = _print_shanten(best_groups)
+    to_print = _print_shanten(best_groups, hand.get_natural_size())
     if len(best_groups) < 10:
         to_print += "\n".join(str(res) for res in best_groups) + '\n'
         return to_print
@@ -473,8 +473,8 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
     :param hand_types: list all hand types to analyze, if specified
     :return: a string containing the analysis
     """
-    if len(hand.hand_tiles) < 13:
-        raise AttributeError('Not enough tiles. At least 13 are needed for analysis.')
+    if len(hand.hand_tiles) < hand.get_natural_size():
+        raise AttributeError(f'Not enough tiles. At least {hand.get_natural_size()} are needed for analysis.')
 
     if not hand_types:
         hand_types = HandType
@@ -523,7 +523,7 @@ def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
     :param display_all: if False, only show the hand types closest to victory
     :return: a string containing the analysis
     """
-    mahjong_hand = MahjongHand(parse_tiles(hand.lower()))
+    mahjong_hand = parse_hand(hand)
     results, acceptance, best_results, _ = analyze_hand(mahjong_hand)
     return _print_hand_analysis(mahjong_hand, results, acceptance, best_results, display_all)
 
@@ -534,11 +534,12 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
     for result_type in to_display:
         printed_result += '-----------------------------\n'
         printed_result += result_type + '\n'
-        printed_result += _print_result(results[result_type])
+        printed_result += _print_result(results[result_type], hand)
         printed_result += "Tile acceptance " + str(sorted(acceptance[result_type])) + \
                           f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
     printed_result += '-----------------------------\n'
-    printed_result += _print_best_discard_choice(best_results, results, acceptance, hand)
+    if hand.needs_to_discard():
+        printed_result += _print_best_discard_choice(best_results, results, acceptance, hand)
     return printed_result
 
 
