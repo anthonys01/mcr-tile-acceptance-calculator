@@ -3,12 +3,7 @@ from group_finder import all_groups_for
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile, HandContext, MahjongGroups, EAST, \
     MahjongMCRYaku, Family
 from tile_acceptance_calculator import get_tile_acceptance_of_groups
-from tiles_utils import parse_tiles
-
-
-ORPHANS = set(parse_tiles('19s19p19m1234567z'))
-
-HONORS = set(parse_tiles('1234567z'))
+from tiles_utils import parse_tiles, HONOR_TILES, ORPHAN_TILES
 
 
 def _get_all_tenpai_forms(hand: MahjongHand) -> tuple[list[MahjongGroups], list[MahjongGroups]]:
@@ -119,29 +114,6 @@ def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCR
     return list(results.items())
 
 
-def _print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]):
-    rows = []
-    for yaku, count in yakus:
-        name = yaku.name.replace("_", " ").title()
-        if count > 1:
-            name = f"{name} \u00d7{count}"
-        rows.append((name, yaku.get_points() * count))
-    total = sum(points for _, points in rows)
-    name_width = max([len("Yaku")] + [len(name) for name, _ in rows])
-    points_width = max(
-        [len("Points")] + [len(str(points)) for _, points in rows] + [len(str(total))]
-    )
-    sep = f"+-{'-' * name_width}-+-{'-' * points_width}-+"
-    print(sep)
-    print(f"| {'Yaku':<{name_width}} | {'Points':>{points_width}} |")
-    print(sep)
-    for name, points in rows:
-        print(f"| {name:<{name_width}} | {points:>{points_width}} |")
-    print(sep)
-    print(f"| {'Total':<{name_width}} | {total:>{points_width}} |")
-    print(sep)
-
-
 def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
     compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.SEVEN_PAIRS, 1)]
     families = set()
@@ -224,7 +196,7 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
 
 
 def _is_thirteen_orphans(hand):
-    for tile in ORPHANS:
+    for tile in ORPHAN_TILES:
         if tile not in hand.hand_tiles:
             return False
     for tile in hand.hand_tiles:
@@ -235,12 +207,12 @@ def _is_thirteen_orphans(hand):
 
 def _get_orphans_acceptance(hand: MahjongHand):
     hand_tiles = hand.get_tiles_without_last()
-    orphans_acceptance = ORPHANS.difference(hand_tiles)
-    return orphans_acceptance if orphans_acceptance else ORPHANS
+    orphans_acceptance = set(ORPHAN_TILES).difference(hand_tiles)
+    return orphans_acceptance if orphans_acceptance else set(ORPHAN_TILES)
 
 
 def _check_knitted(hand: MahjongHand) -> MahjongGroups:
-    honors_tiles = HONORS.intersection(hand.get_free_tiles())
+    honors_tiles = HONOR_TILES.intersection(hand.get_free_tiles())
     if len(honors_tiles) >= 5 and hand.is_closed_hand():
         _, knitted_tiles = hand.get_missing_tiles_and_residue(honors_tiles)
         if _check_knitted_straight(knitted_tiles):
@@ -298,7 +270,7 @@ def _get_knitted_honors_acceptance(hand: MahjongHand, knitted):
         knitted_tiles.add(tile)
         knitted_tiles.add(MahjongTile(number=((tile.number + 2) % 9) + 1, family=tile.family))
         knitted_tiles.add(MahjongTile(number=((tile.number + 5) % 9) + 1, family=tile.family))
-    knitted_tiles.update(HONORS)
+    knitted_tiles.update(HONOR_TILES)
     return knitted_tiles.difference(hand.get_tiles_without_last())
 
 
@@ -351,6 +323,31 @@ def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile):
         context = _get_context(hand, knitted, tile_acceptance, self_drawn, last_tile)
         yakus.extend(_get_standard_hand_yakus(context))
     return tile_acceptance, knitted, yakus
+
+
+def print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]) -> str:
+    """
+        Return a str with a formatted table of all the yakus, with the total
+    """
+    rows = []
+    for yaku, count in sorted(yakus, key=lambda x: x[0].get_points(), reverse=True):
+        name = yaku.name.replace("_", " ").title()
+        if count > 1:
+            name = f"{name} \u00d7{count}"
+        rows.append((name, yaku.get_points() * count))
+    total = sum(points for _, points in rows)
+    name_width = max([len("Yaku")] + [len(name) for name, _ in rows])
+    points_width = max(
+        [len("Points")] + [len(str(points)) for _, points in rows] + [len(str(total))]
+    )
+    sep = f"+-{'-' * name_width}-+-{'-' * points_width}-+"
+    result = [sep, f"| {'Yaku':<{name_width}} | {'Points':>{points_width}} |", sep]
+    for name, points in rows:
+        result.append(f"| {name:<{name_width}} | {points:>{points_width}} |")
+    result.append(sep)
+    result.append(f"| {'Total':<{name_width}} | {total:>{points_width}} |")
+    result.append(sep)
+    return "\n".join(result)
 
 
 def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
@@ -472,7 +469,7 @@ def _test_scorer():
 
     acceptance, won, yakus = get_won_hand_yakus(hand)
     print(won, acceptance)
-    _print_yakus(yakus)
+    print(print_yakus(yakus))
 
 
 if __name__ == '__main__':

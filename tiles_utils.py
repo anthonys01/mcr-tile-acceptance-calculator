@@ -56,6 +56,7 @@ DRAGONS_TILES = parse_tiles("567z")
 HONOR_TILES = WINDS_TILES + DRAGONS_TILES
 FIRST_FOUR_TILES = parse_tiles("1234s1234p1234m")
 LAST_FOUR_TILES = parse_tiles("6789s6789p6789m")
+ORPHAN_TILES = parse_tiles("19s19p19m") + HONOR_TILES
 FAMILY_TILES = {
     Family.CHARACTER: parse_tiles("123456789m"),
     Family.BAMBOO: parse_tiles("123456789s"),
