@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>MCR hand scorer</title>
+  <title>MCR hand scorer (Pyodide)</title>
 </head>
 <body>
-  <input type="text" id="textInput" placeholder="Enter hand">
-  <label><input type="checkbox" id="self_drawn"> Self Drawn</label>
-  <label><input type="checkbox" id="last_tile"> Last Tile</label>
+  <input id="textInput" placeholder="Enter hand" type="text">
+  <label><input id="self_drawn" type="checkbox"> Self Drawn</label>
+  <label><input id="last_tile" type="checkbox"> Last Tile</label>
   <label><select id="prevalent_wind">
     <option value="1">East</option>
     <option value="2">South</option>
@@ -19,36 +19,48 @@
     <option value="3">West</option>
     <option value="4">North</option>
   </select> Seat Wind</label>
-  <button onclick="sendData()">Calculate</button>
+  <button id="calcBtn" disabled>Calculate</button>
   <pre id="result"></pre>
 
+  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
-    function sendData() {
+    async function init() {
+      const pyodide = await loadPyodide();
+      const pyFiles = ['mcr_scorer.py','tiles_utils.py','tile_acceptance_calculator.py','pattern_generator.py','group_finder.py','mahjong_objects.py'];
+      const base = './';
+      for (const f of pyFiles) {
+        const resp = await fetch(base + f);
+        const text = await resp.text();
+        pyodide.FS.writeFile('/home/pyodide/' + f, text);
+      }
+      await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')");
+      window.pyodide = pyodide;
+      document.getElementById('calcBtn').disabled = false;
+    }
+    init();
+
+    async function sendData() {
       const input = document.getElementById("textInput").value;
       const self_drawn = document.getElementById("self_drawn").checked;
       const last_tile = document.getElementById("last_tile").checked;
       const prevalent_wind = Number(document.getElementById("prevalent_wind").value);
       const seat_wind = Number(document.getElementById("seat_wind").value);
       const startTime = performance.now();
-
-      fetch('/calculate-value', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, self_drawn, last_tile, prevalent_wind, seat_wind })
-      })
-    .then(async response => {
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Unknown error');
+      try {
+        pyodide.globals.set("user_input", input);
+        pyodide.globals.set("self_drawn", self_drawn);
+        pyodide.globals.set("last_tile", last_tile);
+        pyodide.globals.set("prevalent_wind", prevalent_wind);
+        pyodide.globals.set("seat_wind", seat_wind);
+        const result = await pyodide.runPythonAsync(`from tiles_utils import parse_hand\nfrom mcr_scorer import get_won_hand_yakus, print_yakus\nhand = parse_hand(user_input)\nacceptance, won_hand, yakus = get_won_hand_yakus(hand, self_drawn, last_tile, prevalent_wind, seat_wind)\nresult = print_yakus(yakus)\nresult`);
+        const endTime = performance.now();
+        const duration = ((endTime - startTime)/1000).toFixed(2);
+        document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${result}`;
+      } catch (err) {
+        document.getElementById("result").innerText = "Error: " + err;
       }
-      const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-      document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${data.result}`;
-    })
-    .catch(error => {
-      document.getElementById("result").innerText = "Error: " + error.message;
-    });
     }
+    document.getElementById('calcBtn').addEventListener('click', sendData);
   </script>
 </body>
 </html>

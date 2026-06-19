@@ -1,38 +1,47 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Tile acceptance calculator</title>
+  <title>Tile acceptance calculator (Pyodide)</title>
 </head>
 <body>
-  <input type="text" id="textInput" placeholder="Enter hand">
-  <label><input type="checkbox" id="checkBox"> Display all results</label>
-  <button onclick="sendData()">Calculate</button>
+  <input id="textInput" placeholder="Enter hand" type="text">
+  <label><input id="checkBox" type="checkbox"> Display all results</label>
+  <button id="calcBtn" disabled>Calculate</button>
   <pre id="result"></pre>
 
+  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
-    function sendData() {
+    async function init() {
+      const pyodide = await loadPyodide();
+      const pyFiles = ['tile_acceptance_calculator.py','tiles_utils.py','pattern_generator.py','group_finder.py','mahjong_objects.py','mcr_scorer.py'];
+      const base = './';
+      for (const f of pyFiles) {
+        const resp = await fetch(base + f);
+        const text = await resp.text();
+        pyodide.FS.writeFile('/home/pyodide/' + f, text);
+      }
+      await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')");
+      window.pyodide = pyodide;
+      document.getElementById('calcBtn').disabled = false;
+    }
+    init();
+
+    async function sendData() {
       const input = document.getElementById("textInput").value;
       const checkbox = document.getElementById("checkBox").checked;
       const startTime = performance.now();
-
-      fetch('/calculate-tile-acceptance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, checkbox })
-      })
-    .then(async response => {
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Unknown error');
+      try {
+        pyodide.globals.set("user_input", input);
+        pyodide.globals.set("display_all", checkbox);
+        const result = await pyodide.runPythonAsync(`from tile_acceptance_calculator import analyze_hand_from_string_and_print\nresult = analyze_hand_from_string_and_print(user_input, display_all)\nresult`);
+        const endTime = performance.now();
+        const duration = ((endTime - startTime)/1000).toFixed(2);
+        document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${result}`;
+      } catch (err) {
+        document.getElementById("result").innerText = "Error: " + err;
       }
-      const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-      document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${data.result}`;
-    })
-    .catch(error => {
-      document.getElementById("result").innerText = "Error: " + error.message;
-    });
     }
+    document.getElementById('calcBtn').addEventListener('click', sendData);
   </script>
 </body>
 </html>
