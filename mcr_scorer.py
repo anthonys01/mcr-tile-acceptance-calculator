@@ -133,6 +133,9 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
         else:
             has_ordinary = True
 
+    if all(pair[0].is_green() for pair in pairs):
+        compatible_yakus.append((MahjongMCRYaku.ALL_GREEN, 1))
+
     if len(families) == 1:
         if has_winds or has_dragon:
             compatible_yakus.append((MahjongMCRYaku.ALL_HONORS, 1))
@@ -143,8 +146,6 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
                     sorted_nums[0] == 3 and sorted_nums[-1] == 9):
                 compatible_yakus.clear()
                 compatible_yakus.append((MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1))
-            elif all(pair[0].is_green() for pair in pairs):
-                compatible_yakus.append((MahjongMCRYaku.ALL_GREEN, 1))
             else:
                 compatible_yakus.append((MahjongMCRYaku.FULL_FLUSH, 1))
     elif len(families) == 2:
@@ -528,6 +529,13 @@ def _test_scorer():
             (MahjongMCRYaku.REVERSIBLE_TILES, 1),
             (MahjongMCRYaku.TILE_HOG, 3),
             (MahjongMCRYaku.ALL_SIMPLE, 1),
+        ]),
+        "11112222333344s": _get_ordinal_yakus([
+            (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
+            (MahjongMCRYaku.FULL_FLUSH, 1),
+            (MahjongMCRYaku.LOWER_FOUR, 1),
+            (MahjongMCRYaku.ALL_CHOWS, 1),
+            (MahjongMCRYaku.CONCEALED_HAND, 1),
         ]),
     }
 
