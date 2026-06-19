@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MCR hand scorer</title>
+</head>
+<body>
+  <input type="text" id="textInput" placeholder="Enter hand">
+  <label><input type="checkbox" id="self_drawn"> Self Drawn</label>
+  <label><input type="checkbox" id="last_tile"> Last Tile</label>
+  <label><select id="prevalent_wind">
+    <option value="1">East</option>
+    <option value="2">South</option>
+    <option value="3">West</option>
+    <option value="4">North</option>
+  </select> Prevalent Wind</label>
+  <label><select id="seat_wind">
+    <option value="1">East</option>
+    <option value="2">South</option>
+    <option value="3">West</option>
+    <option value="4">North</option>
+  </select> Seat Wind</label>
+  <button onclick="sendData()">Calculate</button>
+  <pre id="result"></pre>
+
+  <script>
+    function sendData() {
+      const input = document.getElementById("textInput").value;
+      const self_drawn = document.getElementById("self_drawn").checked;
+      const last_tile = document.getElementById("last_tile").checked;
+      const prevalent_wind = Number(document.getElementById("prevalent_wind").value);
+      const seat_wind = Number(document.getElementById("seat_wind").value);
+      const startTime = performance.now();
+
+      fetch('/calculate-value', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, self_drawn, last_tile, prevalent_wind, seat_wind })
+      })
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unknown error');
+      }
+      const endTime = performance.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
+      document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${data.result}`;
+    })
+    .catch(error => {
+      document.getElementById("result").innerText = "Error: " + error.message;
+    });
+    }
+  </script>
+</body>
+</html>

@@ -40,7 +40,7 @@ def _get_acceptance(won_hand: MahjongHand):
     return acceptance
 
 
-def _get_context(hand, won_hand, acceptance, self_drawn, last_tile):
+def _get_context(hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind):
     groups = []
     pair = None
     chows = []
@@ -80,7 +80,7 @@ def _get_context(hand, won_hand, acceptance, self_drawn, last_tile):
     return HandContext(hand.hand_tiles,
                        tuple(groups), pair, acceptance,
                        chows, pungs, kongs, open_chows, open_pungs, open_kongs,
-                       families, self_drawn, hand.drawn_tile, EAST.number, EAST.number, knitted, last_tile)
+                       families, self_drawn, hand.drawn_tile, prevalent_wind, seat_wind, knitted, last_tile)
 
 
 def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
@@ -299,7 +299,7 @@ def _get_knitted_straight_acceptance(hand, knitted):
     return {winning_tile}
 
 
-def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile):
+def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind):
     yakus = []
     if len(knitted) == 2:
         # with honors
@@ -320,7 +320,7 @@ def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile):
         # standard hand
         yakus.append((MahjongMCRYaku.KNITTED_STRAIGHT, 1))
         tile_acceptance = _get_knitted_straight_acceptance(hand, knitted)
-        context = _get_context(hand, knitted, tile_acceptance, self_drawn, last_tile)
+        context = _get_context(hand, knitted, tile_acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)
         yakus.extend(_get_standard_hand_yakus(context))
     return tile_acceptance, knitted, yakus
 
@@ -350,7 +350,8 @@ def print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]) -> str:
     return "\n".join(result)
 
 
-def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
+def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
+                       prevalent_wind = EAST.number, seat_wind = EAST.number) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
     """
     Compute the hand tenpai acceptance and yakus
     Only supports a complete hand
@@ -378,13 +379,13 @@ def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False) 
     # check knitted
     knitted = _check_knitted(hand)
     if knitted:
-        return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile)
+        return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind)
 
     acceptance = _get_acceptance(hand)
     tenpai_hands, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
-            context = _get_context(hand, won_hand, acceptance, self_drawn, last_tile)
+            context = _get_context(hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)
             won_hands_scores.append((won_hand, _get_standard_hand_yakus(context)))
     best_pattern = max(won_hands_scores, key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]))
     return acceptance, best_pattern[0], best_pattern[1]
@@ -521,9 +522,8 @@ def _test_scorer():
     for hand_str in tests.keys():
         acceptance, won, yakus = get_won_hand_yakus(parse_hand(hand_str))
         ok = _get_ordinal_yakus(yakus) == tests[hand_str]
-        if not ok:
-            print(won, acceptance)
-            print(print_yakus(yakus))
+        print(won, acceptance)
+        print(print_yakus(yakus))
 
 
 if __name__ == '__main__':
