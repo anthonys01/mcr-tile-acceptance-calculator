@@ -138,11 +138,13 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
             compatible_yakus.append((MahjongMCRYaku.ALL_HONORS, 1))
         else:
             sorted_nums = list(sorted(pair[0].number for pair in pairs))
-            if sorted_nums[0] == 1 and sorted_nums[-1] == 7 or\
+            if len(set(sorted_nums)) == 7 and (sorted_nums[0] == 1 and sorted_nums[-1] == 7 or\
                     sorted_nums[0] == 2 and sorted_nums[-1] == 8 or\
-                    sorted_nums[0] == 3 and sorted_nums[-1] == 9:
+                    sorted_nums[0] == 3 and sorted_nums[-1] == 9):
                 compatible_yakus.clear()
                 compatible_yakus.append((MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1))
+            elif all(pair[0].is_green() for pair in pairs):
+                compatible_yakus.append((MahjongMCRYaku.ALL_GREEN, 1))
             else:
                 compatible_yakus.append((MahjongMCRYaku.FULL_FLUSH, 1))
     elif len(families) == 2:
@@ -360,6 +362,7 @@ def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
     if not hand.needs_to_discard():
         return set(), (), []
     won_hands_scores = []
+    acceptance = set()
     if hand.is_closed_hand() and not hand.kongs:
         # check orphans (can return immediately)
         if _is_thirteen_orphans(hand):
@@ -375,13 +378,14 @@ def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
         if pairs and not pairs[0][1]:
             won_hands_scores.append(
                 (pairs[0][0], _get_yakus_compatible_with_seven_pairs(pairs[0][0], self_drawn, last_tile)))
+            acceptance.add(hand.drawn_tile)
 
     # check knitted
     knitted = _check_knitted(hand)
     if knitted:
         return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind)
 
-    acceptance = _get_acceptance(hand)
+    acceptance.update(_get_acceptance(hand))
     tenpai_hands, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
@@ -517,13 +521,22 @@ def _test_scorer():
             (MahjongMCRYaku.REVERSIBLE_TILES, 1),
             (MahjongMCRYaku.TILE_HOG, 3),
         ]),
+        "22224444668888s": _get_ordinal_yakus([
+            (MahjongMCRYaku.ALL_GREEN, 1),
+            (MahjongMCRYaku.SEVEN_PAIRS, 1),
+            (MahjongMCRYaku.FULL_FLUSH, 1),
+            (MahjongMCRYaku.REVERSIBLE_TILES, 1),
+            (MahjongMCRYaku.TILE_HOG, 3),
+            (MahjongMCRYaku.ALL_SIMPLE, 1),
+        ]),
     }
 
     for hand_str in tests.keys():
         acceptance, won, yakus = get_won_hand_yakus(parse_hand(hand_str))
         ok = _get_ordinal_yakus(yakus) == tests[hand_str]
-        print(won, acceptance)
-        print(print_yakus(yakus))
+        if not ok:
+            print(won, acceptance)
+            print(print_yakus(yakus))
 
 
 if __name__ == '__main__':
