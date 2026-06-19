@@ -45,7 +45,7 @@ def _get_acceptance(won_hand: MahjongHand):
     return acceptance
 
 
-def _get_context(hand, won_hand, acceptance):
+def _get_context(hand, won_hand, acceptance, self_drawn, last_tile):
     groups = []
     pair = None
     chows = []
@@ -85,7 +85,7 @@ def _get_context(hand, won_hand, acceptance):
     return HandContext(hand.hand_tiles,
                        tuple(groups), pair, acceptance,
                        chows, pungs, kongs, open_chows, open_pungs, open_kongs,
-                       families, False, hand.drawn_tile, EAST.number, EAST.number, knitted, False)
+                       families, self_drawn, hand.drawn_tile, EAST.number, EAST.number, knitted, last_tile)
 
 
 def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
@@ -142,7 +142,7 @@ def _print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]):
     print(sep)
 
 
-def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn):
+def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
     compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.SEVEN_PAIRS, 1)]
     families = set()
     has_dragon = False
@@ -191,12 +191,35 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn):
     elif not has_dragon and not has_winds and not has_terminals and has_ordinary:
         compatible_yakus.append((MahjongMCRYaku.ALL_SIMPLE, 1))
 
+    if all(p[0].number <= 3 for p in pairs):
+        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        compatible_yakus.append((MahjongMCRYaku.LOWER_TILES, 1))
+    elif all(p[0].number >= 7 for p in pairs):
+        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        compatible_yakus.append((MahjongMCRYaku.UPPER_TILES, 1))
+    elif all(4 <= p[0].number <= 6 for p in pairs):
+        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        (MahjongMCRYaku.ALL_SIMPLE, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.ALL_SIMPLE, 1))
+        compatible_yakus.append((MahjongMCRYaku.MIDDLE_TILES, 1))
+    elif all(p[0].number <= 4 for p in pairs):
+        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        compatible_yakus.append((MahjongMCRYaku.LOWER_FOUR, 1))
+    elif all(p[0].number >= 6 for p in pairs):
+        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        compatible_yakus.append((MahjongMCRYaku.UPPER_FOUR, 1))
+
+    if all(p[0].is_symmetric() for p in pairs):
+        (MahjongMCRYaku.ONE_VOIDED_SUIT, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.ONE_VOIDED_SUIT, 1))
+        compatible_yakus.append((MahjongMCRYaku.REVERSIBLE_TILES, 1))
+
     unique_pairs = len(set(pairs))
     if unique_pairs < 7:
         compatible_yakus.append((MahjongMCRYaku.TILE_HOG, 7 - unique_pairs))
 
     if self_drawn:
         compatible_yakus.append((MahjongMCRYaku.FULLY_CONCEALED, 1))
+    if last_tile:
+        compatible_yakus.append((MahjongMCRYaku.LAST_TILE, 1))
     return compatible_yakus
 
 
@@ -304,7 +327,7 @@ def _get_knitted_straight_acceptance(hand, knitted):
     return {winning_tile}
 
 
-def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile=False):
+def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile):
     yakus = []
     if len(knitted) == 2:
         # with honors
@@ -325,40 +348,46 @@ def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile=Fals
         # standard hand
         yakus.append((MahjongMCRYaku.KNITTED_STRAIGHT, 1))
         tile_acceptance = _get_knitted_straight_acceptance(hand, knitted)
-        context = _get_context(hand, knitted, tile_acceptance)
+        context = _get_context(hand, knitted, tile_acceptance, self_drawn, last_tile)
         yakus.extend(_get_standard_hand_yakus(context))
     return tile_acceptance, knitted, yakus
 
 
-def get_won_hand_yakus(hand, self_drawn: bool = False) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
+def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
+    """
+    Compute the hand tenpai acceptance and yakus
+    Only supports a complete hand
+    :return: acceptance, won hand, yakus
+    """
     if not hand.needs_to_discard():
         return set(), (), []
     won_hands_scores = []
     if hand.is_closed_hand() and not hand.kongs:
         # check orphans (can return immediately)
         if _is_thirteen_orphans(hand):
-            # last tile not taken into account
             yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.THIRTEEN_ORPHANS, 1)]
             if self_drawn:
                 yakus.append((MahjongMCRYaku.FULLY_CONCEALED, 1))
+            if last_tile:
+                yakus.append((MahjongMCRYaku.LAST_TILE, 1))
             return _get_orphans_acceptance(hand), tuple(hand.hand_tiles), yakus
 
         # check pairs
         pairs: list[MahjongCombination] = all_groups_for(hand.get_free_tiles(), 0, 0, 7)
         if pairs and not pairs[0][1]:
             won_hands_scores.append(
-                (pairs[0][0], _get_yakus_compatible_with_seven_pairs(pairs[0][0], self_drawn)))
+                (pairs[0][0], _get_yakus_compatible_with_seven_pairs(pairs[0][0], self_drawn, last_tile)))
 
     # check knitted
     knitted = _check_knitted(hand)
     if knitted:
-        return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn)
+        return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile)
 
     acceptance = _get_acceptance(hand)
     tenpai_hands, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
-            context = _get_context(hand, won_hand, acceptance)
+            context = _get_context(hand, won_hand, acceptance, self_drawn, last_tile)
             won_hands_scores.append((won_hand, _get_standard_hand_yakus(context)))
     best_pattern = max(won_hands_scores, key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]))
     return acceptance, best_pattern[0], best_pattern[1]
@@ -428,12 +457,18 @@ def _test_scorer():
     # hand.kongs.add((MahjongTile('1m'), MahjongTile('1m'), MahjongTile('1m'), MahjongTile('1m')))
     # hand.kongs.add((MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s')))
     # # should be Three Concealed Pungs + All Pungs + Two Concealed Kongs + Triple Pung + Pung of Terminals or Honors x 3 + Concealed Hand + Dragon Pung
+    #
+    # hand = MahjongHand(parse_tiles("2222s3333p555577m555z"), MahjongTile("7m"))
+    # hand.kongs.add((MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m')))
+    # hand.kongs.add((MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s')))
+    # hand.kongs.add((MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p')))
+    # # should be Four Concealed Pungs + Three Kongs + Dragon Pung + Single Wait
+    #
+    # hand = MahjongHand(parse_tiles("2244s1122223344p"), MahjongTile("2p"))
+    # # should be Seven Pairs + Lower Four + Reversible Tiles + Tile Hog
 
-    hand = MahjongHand(parse_tiles("2222s3333p555577m555z"), MahjongTile("7m"))
-    hand.kongs.add((MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m')))
-    hand.kongs.add((MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s')))
-    hand.kongs.add((MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p')))
-    # should be Four Concealed Pungs + Three Kongs + Dragon Pung + Single Wait
+    hand = MahjongHand(parse_tiles("11112222334444p"), MahjongTile("2p"))
+    # should be Seven Pairs + Lower Four + Reversible Tiles + Tile Hog
 
     acceptance, won, yakus = get_won_hand_yakus(hand)
     print(won, acceptance)
