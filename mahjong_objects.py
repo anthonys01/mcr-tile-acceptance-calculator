@@ -222,7 +222,7 @@ class MahjongHand:
         self.hand_tiles: MahjongTiles = hand_tiles
         self.drawn_tile: MahjongTile = drawn_tile
         self.declared_tiles: set[MahjongGroup] = set()
-        self.kans: set[MahjongGroup] = set()
+        self.kongs: set[MahjongGroup] = set()
 
     def get_free_tiles(self) -> MahjongTiles:
         """
@@ -230,7 +230,7 @@ class MahjongHand:
         :return: the free tiles in hand
         """
         free_tiles = list(self.hand_tiles)
-        for group in self.declared_tiles:
+        for group in self.get_all_declared_groups():
             for tile in group:
                 free_tiles.remove(tile)
         return free_tiles
@@ -239,13 +239,13 @@ class MahjongHand:
         return not self.declared_tiles
 
     def get_natural_size(self):
-        return 13 + len(self.kans)
+        return 13 + len(self.kongs)
 
     def needs_to_discard(self):
         return len(self.hand_tiles) == self.get_natural_size() + 1
 
     def get_all_declared_groups(self) -> list[MahjongGroup]:
-        return list(self.declared_tiles.union(self.kans))
+        return list(self.declared_tiles.union(self.kongs))
 
     def get_tiles_without_last(self):
         tiles = list(self.hand_tiles)
@@ -362,7 +362,7 @@ class HandContext:
 # ---------------------------------------------------------------------------
 
 def _concealed_pungs(h: "HandContext") -> list[MahjongGroup]:
-    return [g for g in h.pungs if g not in h.open_pungs]
+    return [g for g in h.pungs if g not in h.open_pungs and (h.is_drawn or h.winning_tile != g[0])] + _concealed_kongs(h)
 
 
 def _concealed_kongs(h: "HandContext") -> list[MahjongGroup]:
@@ -806,7 +806,7 @@ def _check_fully_concealed(h: "HandContext") -> bool:
 
 
 def _check_two_melded_kongs(h: "HandContext") -> bool:
-    return len(h.open_kongs) >= 2
+    return len(h.kongs) >= 2
 
 
 def _check_last_tile(h: "HandContext") -> bool:
@@ -1069,7 +1069,7 @@ class MahjongMCRYaku(Enum):
     MIXED_SHIFTED_PUNGS      = (42, 8,  [],                   _check_mixed_shifted_pungs)
     CHICKEN_HAND             = (43, 8,  [],                   _check_not_implemented)
     # 44, 45, 46, 47 situational
-    TWO_CONCEALED_KONGS      = (48, 8,  [67],                 _check_two_concealed_kongs)
+    TWO_CONCEALED_KONGS      = (48, 8,  [57, 67],                 _check_two_concealed_kongs)
     ALL_PUNGS                = (49, 6,  [],                   _check_all_pungs)
     HALF_FLUSH               = (50, 6,  [75],                 _check_half_flush)
     MIXED_SHIFTED_CHOWS      = (51, 6,  [],                   _check_mixed_shifted_chows)

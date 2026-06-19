@@ -35,6 +35,7 @@ def _get_acceptance(won_hand: MahjongHand):
         return set()
     tenpai_hand = MahjongHand(won_hand.get_tiles_without_last())
     tenpai_hand.declared_tiles = set(won_hand.declared_tiles)
+    tenpai_hand.kongs = set(won_hand.kongs)
     declared_groups = tenpai_hand.get_all_declared_groups()
     tenpai_forms, _ = _get_all_tenpai_forms(tenpai_hand)
     acceptance = set()
@@ -221,7 +222,7 @@ def _check_knitted(hand: MahjongHand) -> MahjongGroups:
         _, knitted_tiles = hand.get_missing_tiles_and_residue(honors_tiles)
         if _check_knitted_straight(knitted_tiles):
             return tuple(knitted_tiles), tuple(honors_tiles)
-    if len(hand.declared_tiles.union(hand.kans)) > 1:
+    if len(hand.declared_tiles.union(hand.kongs)) > 1:
         return ()
     elif hand.is_closed_hand():
         free_groups: list[MahjongCombination] = all_groups_for(hand.hand_tiles, 1, 0, 1) +\
@@ -231,7 +232,7 @@ def _check_knitted(hand: MahjongHand) -> MahjongGroups:
                 if _check_knitted_straight(residue):
                     return tuple(residue), groups[0], groups[1]
     else:
-        group = list(hand.declared_tiles.union(hand.kans))[0]
+        group = list(hand.declared_tiles.union(hand.kongs))[0]
         for pairs, residue in all_groups_for(hand.get_free_tiles(), 0, 0, 1):
             if pairs and len(pairs[0]) == 2:
                 if _check_knitted_straight(residue):
@@ -333,7 +334,7 @@ def get_won_hand_yakus(hand, self_drawn: bool = False) -> tuple[set[MahjongTile]
     if not hand.needs_to_discard():
         return set(), (), []
     won_hands_scores = []
-    if hand.is_closed_hand() and not hand.kans:
+    if hand.is_closed_hand() and not hand.kongs:
         # check orphans (can return immediately)
         if _is_thirteen_orphans(hand):
             # last tile not taken into account
@@ -412,10 +413,27 @@ def _test_scorer():
     #
     # hand = MahjongHand(parse_tiles("1111p22s9999m1166z"), MahjongTile("1z"))
     # # should be Seven Pairs, All Types, Tile Hog x 2
+    #
+    # hand = MahjongHand(parse_tiles("222p345m234789s11z"), MahjongTile("2s"))
+    # hand.declared_tiles.add((MahjongTile('2p'), MahjongTile('2p'), MahjongTile('2p')))
+    # # should be Chicken Hand
+    #
+    # hand = MahjongHand(parse_tiles("1111s111p222278999m"), MahjongTile("9m"))
+    # hand.declared_tiles.add((MahjongTile('2m'), MahjongTile('2m'), MahjongTile('2m'), MahjongTile('2m')))
+    # hand.kongs.add((MahjongTile('2m'), MahjongTile('2m'), MahjongTile('2m'), MahjongTile('2m')))
+    # hand.kongs.add((MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s')))
+    # # should be Outside Hand, Two Melded Kongs + Concealed Kong + Pung of Terminals or Honors x 2 + Double Pung + No Honor
+    #
+    # hand = MahjongHand(parse_tiles("1111s111p111155m555z"), MahjongTile("5z"))
+    # hand.kongs.add((MahjongTile('1m'), MahjongTile('1m'), MahjongTile('1m'), MahjongTile('1m')))
+    # hand.kongs.add((MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s'), MahjongTile('1s')))
+    # # should be Three Concealed Pungs + All Pungs + Two Concealed Kongs + Triple Pung + Pung of Terminals or Honors x 3 + Concealed Hand + Dragon Pung
 
-    hand = MahjongHand(parse_tiles("222p345m234789s11z"), MahjongTile("2s"))
-    hand.declared_tiles.add((MahjongTile('2p'), MahjongTile('2p'), MahjongTile('2p')))
-    # should be Chicken Hand
+    hand = MahjongHand(parse_tiles("2222s3333p555577m555z"), MahjongTile("7m"))
+    hand.kongs.add((MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m'), MahjongTile('5m')))
+    hand.kongs.add((MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s'), MahjongTile('2s')))
+    hand.kongs.add((MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p'), MahjongTile('3p')))
+    # should be Four Concealed Pungs + Three Kongs + Dragon Pung + Single Wait
 
     acceptance, won, yakus = get_won_hand_yakus(hand)
     print(won, acceptance)
