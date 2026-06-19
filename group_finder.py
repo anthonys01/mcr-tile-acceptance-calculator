@@ -314,7 +314,7 @@ def _iter_sequence_groups(counts: list[int]) -> Iterator[tuple[tuple[int, ...], 
     """Yield sequence-type proto-groups (3-run, partial runs, single) as (indices, group).
 
     Mirrors find_sequences: families in (bamboo, circle, character) order, ascending
-    numbers 1..7, yielding the full run, the two partial runs then the single tile."""
+    numbers 1..9, yielding the full run, the two partial runs then the single tile."""
     for offset in _SEQUENCE_FAMILY_OFFSETS:
         for base in range(offset, offset + 7):  # numbers 1..7
             if counts[base] == 0:
@@ -328,6 +328,15 @@ def _iter_sequence_groups(counts: list[int]) -> Iterator[tuple[tuple[int, ...], 
                 yield (base, base + 1), (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 1])
             if has_plus_two:
                 yield (base, base + 2), (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 2])
+            yield (base,), (INDEX_TO_TILE[base],)
+        base = offset + 7
+        if counts[base] > 0:
+            has_plus_one = counts[base + 1] > 0
+            if has_plus_one:
+                yield (base, base + 1), (INDEX_TO_TILE[base], INDEX_TO_TILE[base + 1])
+            yield (base,), (INDEX_TO_TILE[base],)
+        base = offset + 8
+        if counts[base] > 0:
             yield (base,), (INDEX_TO_TILE[base],)
 
 
@@ -482,5 +491,6 @@ def _recurse_counts(counts: list[int], total: int, order: list[int],
 
 
 if __name__ == "__main__":
-    print(all_groups_for(parse_tiles("134679s1222z"), 3, 0, 0))
+    # print(all_groups_for(parse_tiles("134679s1222z"), 3, 0, 0))
     # print(all_groups_for(parse_tiles("123s"), 1, 0, 0))
+    print(all_groups_for(parse_tiles("11p89s"), 1, 0, 1))

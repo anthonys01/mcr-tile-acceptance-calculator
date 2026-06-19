@@ -342,6 +342,7 @@ class HandContext:
     winning_tile: MahjongTile
     prevalent_wind: int = 0   # 1-4 for East-North, 0 if unknown
     seat_wind: int = 0        # 1-4 for East-North, 0 if unknown
+    has_knitted_straight: bool = False
     is_last_tile: bool = False
     # Mutable pools consumed by group-combination yaku checks (highest value first).
     # Once a group is claimed for one combination, it is removed here so lower-value
@@ -740,7 +741,7 @@ def _check_two_concealed_kongs(h: "HandContext") -> bool:
 
 
 def _check_all_pungs(h: "HandContext") -> bool:
-    return not h.chows
+    return not h.has_knitted_straight and not h.chows
 
 
 def _check_half_flush(h: "HandContext") -> bool:
@@ -770,16 +771,21 @@ def _check_mixed_shifted_chows(h: "HandContext") -> bool:
 
 
 def _check_all_types(h: "HandContext") -> bool:
-    """Hand contains tiles from all 3 suits + honors, and has both chows and pungs."""
-    return (bool(h.chows) and bool(h.pungs or h.kongs)
-            and len(h.families) == 4)
+    """Hand contains tiles from all 3 suits + winds + dragons."""
+    has_wind = False
+    has_dragon = False
+    for tile in h.all_tiles:
+        if tile.is_wind():
+            has_wind = True
+        elif tile.is_dragon():
+            has_dragon = True
+    return len(h.families) == 4 and has_wind and has_dragon
 
 
 def _check_melded_hand(h: "HandContext") -> bool:
     """All groups are open (melded), won by discard."""
-    total_groups = len(h.chows) + len(h.pungs) + len(h.kongs)
     open_groups = len(h.open_chows) + len(h.open_pungs) + len(h.open_kongs)
-    return not h.is_drawn and total_groups == open_groups
+    return not h.is_drawn and open_groups == 4
 
 
 def _check_two_dragons_pungs(h: "HandContext") -> bool:
@@ -790,7 +796,7 @@ def _check_outside_hand(h: "HandContext") -> bool:
     """Every group and the pair contains at least one terminal or honor."""
     def _has_toh(group: MahjongGroup) -> bool:
         return any(t.is_terminal() or t.is_honor() for t in group)
-    return _has_toh(h.pair) and all(_has_toh(g) for g in h.groups)
+    return not h.has_knitted_straight and _has_toh(h.pair) and all(_has_toh(g) for g in h.groups)
 
 
 def _check_fully_concealed(h: "HandContext") -> bool:
@@ -842,7 +848,7 @@ def _check_concealed_hand(h: "HandContext") -> bool:
 
 
 def _check_all_chows(h: "HandContext") -> bool:
-    return not h.pungs and not h.kongs
+    return not h.pungs and not h.kongs and not h.pair[0].is_honor()
 
 
 def _check_tile_hog(h: "HandContext") -> int:
@@ -978,6 +984,8 @@ def _check_edge_wait(h: "HandContext") -> bool:
         return False
     wt = h.winning_tile
     for g in h.chows:
+        if g in h.open_chows:
+            continue
         if wt in g:
             nums = sorted(t.number for t in g)
             if nums == [1, 2, 3] and wt.number == 3:
@@ -993,6 +1001,8 @@ def _check_closed_wait(h: "HandContext") -> bool:
         return False
     wt = h.winning_tile
     for g in h.chows:
+        if g in h.open_chows:
+            continue
         if wt in g:
             nums = sorted(t.number for t in g)
             if nums[1] == wt.number:
