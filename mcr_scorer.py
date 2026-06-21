@@ -1,18 +1,31 @@
+from typing import Iterable
 
 from group_finder import all_groups_for
-from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile, HandContext, MahjongGroups, EAST, \
-    MahjongMCRYaku, Family
+from mahjong_objects import (
+    MahjongGroup,
+    MahjongHand,
+    MahjongCombination,
+    MahjongTile,
+    HandContext,
+    MahjongGroups,
+    MahjongMCRYaku,
+    Family,
+)
 from tile_acceptance_calculator import get_tile_acceptance_of_groups
-from tiles_utils import parse_tiles, HONOR_TILES, ORPHAN_TILES, parse_hand
+from tiles_utils import HONOR_TILES, ORPHAN_TILES, parse_hand
 
 
-def _get_all_tenpai_forms(hand: MahjongHand) -> tuple[list[MahjongGroups], list[MahjongGroups]]:
+def _get_all_tenpai_forms(
+    hand: MahjongHand,
+) -> tuple[list[MahjongGroups], list[MahjongGroups]]:
     tenpai_hands = []
     won_hands = []
     declared_groups = hand.get_all_declared_groups()
     max_free_groups = 4 - len(declared_groups)
     for seq in range(max_free_groups + 1):
-        free_groups: list[MahjongCombination] = all_groups_for(hand.get_free_tiles(), seq, max_free_groups - seq, 1)
+        free_groups: list[MahjongCombination] = all_groups_for(
+            hand.get_free_tiles(), seq, max_free_groups - seq, 1
+        )
         for g, residue in free_groups:
             groups = declared_groups + list(g)
             if hand.needs_to_discard():
@@ -40,7 +53,15 @@ def _get_acceptance(won_hand: MahjongHand):
     return acceptance
 
 
-def _get_context(hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind):
+def _get_context(
+    hand: MahjongHand,
+    won_hand: Iterable[MahjongGroup],
+    acceptance: set[MahjongTile],
+    self_drawn: bool,
+    last_tile: bool,
+    prevalent_wind: int,
+    seat_wind: int,
+) -> HandContext:
     groups = []
     pair = None
     chows = []
@@ -77,13 +98,33 @@ def _get_context(hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wi
             families.add(Family.CIRCLE)
         families.add(group[0].family)
 
-    return HandContext(hand.hand_tiles,
-                       tuple(groups), pair, acceptance,
-                       chows, pungs, kongs, open_chows, open_pungs, open_kongs,
-                       families, self_drawn, hand.drawn_tile, prevalent_wind, seat_wind, knitted, last_tile)
+    if pair is None or hand.drawn_tile is None:
+        raise AttributeError("not all conditions are OK for hand value analysis")
+
+    return HandContext(
+        hand.hand_tiles,
+        tuple(groups),
+        pair,
+        acceptance,
+        chows,
+        pungs,
+        kongs,
+        open_chows,
+        open_pungs,
+        open_kongs,
+        families,
+        self_drawn,
+        hand.drawn_tile,
+        prevalent_wind,
+        seat_wind,
+        knitted,
+        last_tile,
+    )
 
 
-def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCRYaku, int]]:
+def _get_standard_hand_yakus(
+    hand_context: HandContext,
+) -> list[tuple[MahjongMCRYaku, int]]:
     exclusions = set()
     results: dict[MahjongMCRYaku, int] = {}
 
@@ -115,7 +156,9 @@ def _get_standard_hand_yakus(hand_context: HandContext) -> list[tuple[MahjongMCR
 
 
 def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
-    compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.SEVEN_PAIRS, 1)]
+    compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [
+        (MahjongMCRYaku.SEVEN_PAIRS, 1)
+    ]
     families = set()
     has_dragon = False
     has_winds = False
@@ -141,9 +184,14 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
             compatible_yakus.append((MahjongMCRYaku.ALL_HONORS, 1))
         else:
             sorted_nums = list(sorted(pair[0].number for pair in pairs))
-            if len(set(sorted_nums)) == 7 and (sorted_nums[0] == 1 and sorted_nums[-1] == 7 or\
-                    sorted_nums[0] == 2 and sorted_nums[-1] == 8 or\
-                    sorted_nums[0] == 3 and sorted_nums[-1] == 9):
+            if len(set(sorted_nums)) == 7 and (
+                sorted_nums[0] == 1
+                and sorted_nums[-1] == 7
+                or sorted_nums[0] == 2
+                and sorted_nums[-1] == 8
+                or sorted_nums[0] == 3
+                and sorted_nums[-1] == 9
+            ):
                 compatible_yakus.clear()
                 compatible_yakus.append((MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1))
             else:
@@ -167,24 +215,31 @@ def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
         compatible_yakus.append((MahjongMCRYaku.ALL_SIMPLE, 1))
 
     if all(p[0].number <= 3 for p in pairs):
-        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        if (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
         compatible_yakus.append((MahjongMCRYaku.LOWER_TILES, 1))
     elif all(p[0].number >= 7 for p in pairs):
-        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        if (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
         compatible_yakus.append((MahjongMCRYaku.UPPER_TILES, 1))
     elif all(4 <= p[0].number <= 6 for p in pairs):
-        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
-        (MahjongMCRYaku.ALL_SIMPLE, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.ALL_SIMPLE, 1))
+        if (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        if (MahjongMCRYaku.ALL_SIMPLE, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.ALL_SIMPLE, 1))
         compatible_yakus.append((MahjongMCRYaku.MIDDLE_TILES, 1))
     elif all(p[0].number <= 4 for p in pairs):
-        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        if (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
         compatible_yakus.append((MahjongMCRYaku.LOWER_FOUR, 1))
     elif all(p[0].number >= 6 for p in pairs):
-        (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
+        if (MahjongMCRYaku.NO_HONOR, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.NO_HONOR, 1))
         compatible_yakus.append((MahjongMCRYaku.UPPER_FOUR, 1))
 
     if all(p[0].is_symmetric() for p in pairs):
-        (MahjongMCRYaku.ONE_VOIDED_SUIT, 1) in compatible_yakus and compatible_yakus.remove((MahjongMCRYaku.ONE_VOIDED_SUIT, 1))
+        if (MahjongMCRYaku.ONE_VOIDED_SUIT, 1) in compatible_yakus:
+            compatible_yakus.remove((MahjongMCRYaku.ONE_VOIDED_SUIT, 1))
         compatible_yakus.append((MahjongMCRYaku.REVERSIBLE_TILES, 1))
 
     unique_pairs = len(set(pairs))
@@ -223,10 +278,17 @@ def _check_knitted(hand: MahjongHand) -> MahjongGroups:
     if len(hand.declared_tiles.union(hand.kongs)) > 1:
         return ()
     elif hand.is_closed_hand():
-        free_groups: list[MahjongCombination] = all_groups_for(hand.hand_tiles, 1, 0, 1) +\
-                                                all_groups_for(hand.hand_tiles, 0, 1, 1)
+        free_groups: list[MahjongCombination] = all_groups_for(
+            hand.hand_tiles, 1, 0, 1
+        ) + all_groups_for(hand.hand_tiles, 0, 1, 1)
         for groups, residue in free_groups:
-            if groups and len(groups[0]) == 2 and len(groups[1]) == 3 or len(groups[0]) == 3 and len(groups[1]) == 2:
+            if (
+                groups
+                and len(groups[0]) == 2
+                and len(groups[1]) == 3
+                or len(groups[0]) == 3
+                and len(groups[1]) == 2
+            ):
                 if _check_knitted_straight(residue):
                     return tuple(residue), groups[0], groups[1]
     else:
@@ -243,9 +305,17 @@ def _check_knitted_straight(knitted_tiles: list[MahjongTile]) -> bool:
     if limit < 7 or limit > 9:
         return False
     families: list[list[MahjongTile]] = [[], [], []]
-    tiles_to_family = {1: families[0], 2: families[1], 3: families[2],
-                       4: families[0], 5: families[1], 6: families[2],
-                       7: families[0], 8: families[1], 9: families[2]}
+    tiles_to_family = {
+        1: families[0],
+        2: families[1],
+        3: families[2],
+        4: families[0],
+        5: families[1],
+        6: families[2],
+        7: families[0],
+        8: families[1],
+        9: families[2],
+    }
     for tile in knitted_tiles:
         if tile.is_honor():
             continue
@@ -271,8 +341,12 @@ def _get_knitted_honors_acceptance(hand: MahjongHand, knitted):
     knitted_tiles = set()
     for tile in knitted[0]:
         knitted_tiles.add(tile)
-        knitted_tiles.add(MahjongTile(number=((tile.number + 2) % 9) + 1, family=tile.family))
-        knitted_tiles.add(MahjongTile(number=((tile.number + 5) % 9) + 1, family=tile.family))
+        knitted_tiles.add(
+            MahjongTile(number=((tile.number + 2) % 9) + 1, family=tile.family)
+        )
+        knitted_tiles.add(
+            MahjongTile(number=((tile.number + 5) % 9) + 1, family=tile.family)
+        )
     knitted_tiles.update(HONOR_TILES)
     return knitted_tiles.difference(hand.get_tiles_without_last())
 
@@ -291,18 +365,23 @@ def _get_knitted_straight_acceptance(hand, knitted):
                 free_tiles.extend(knitted[1])
                 free_tiles.extend(knitted[2])
                 free_tiles.remove(winning_tile)
-                free_groups: list[MahjongCombination] = all_groups_for(free_tiles, 1, 0, 1) + \
-                                                        all_groups_for(free_tiles, 0, 1, 1)
+                free_groups: list[MahjongCombination] = all_groups_for(
+                    free_tiles, 1, 0, 1
+                ) + all_groups_for(free_tiles, 0, 1, 1)
                 for groups, residue in free_groups:
                     if residue:
                         continue
-                    straight_acceptance.update(get_tile_acceptance_of_groups(tuple(groups)))
+                    straight_acceptance.update(
+                        get_tile_acceptance_of_groups(tuple(groups))
+                    )
                 return straight_acceptance
     # winning tile in the knitted straight group
     return {winning_tile}
 
 
-def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind):
+def _get_yakus_compatible_with_knitted(
+    hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind
+):
     yakus = []
     if len(knitted) == 2:
         # with honors
@@ -323,14 +402,22 @@ def _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, pre
         # standard hand
         yakus.append((MahjongMCRYaku.KNITTED_STRAIGHT, 1))
         tile_acceptance = _get_knitted_straight_acceptance(hand, knitted)
-        context = _get_context(hand, knitted, tile_acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)
+        context = _get_context(
+            hand,
+            knitted,
+            tile_acceptance,
+            self_drawn,
+            last_tile,
+            prevalent_wind,
+            seat_wind,
+        )
         yakus.extend(_get_standard_hand_yakus(context))
     return tile_acceptance, knitted, yakus
 
 
 def print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]) -> str:
     """
-        Return a str with a formatted table of all the yakus, with the total
+    Return a str with a formatted table of all the yakus, with the total
     """
     rows = []
     for yaku, count in sorted(yakus, key=lambda x: x[0].get_id()):
@@ -353,8 +440,13 @@ def print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]) -> str:
     return "\n".join(result)
 
 
-def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
-                       prevalent_wind = EAST.number, seat_wind = EAST.number) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
+def get_won_hand_yakus(
+    hand,
+    self_drawn: bool = False,
+    last_tile: bool = False,
+    prevalent_wind=0,
+    seat_wind=0,
+) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
     """
     Compute the hand tenpai acceptance and yakus
     Only supports a complete hand
@@ -367,7 +459,9 @@ def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
     if hand.is_closed_hand() and not hand.kongs:
         # check orphans (can return immediately)
         if _is_thirteen_orphans(hand):
-            yakus: list[tuple[MahjongMCRYaku, int]] = [(MahjongMCRYaku.THIRTEEN_ORPHANS, 1)]
+            yakus: list[tuple[MahjongMCRYaku, int]] = [
+                (MahjongMCRYaku.THIRTEEN_ORPHANS, 1)
+            ]
             if self_drawn:
                 yakus.append((MahjongMCRYaku.FULLY_CONCEALED, 1))
             if last_tile:
@@ -378,21 +472,40 @@ def get_won_hand_yakus(hand, self_drawn: bool = False, last_tile: bool = False,
         pairs: list[MahjongCombination] = all_groups_for(hand.get_free_tiles(), 0, 0, 7)
         if pairs and not pairs[0][1]:
             won_hands_scores.append(
-                (pairs[0][0], _get_yakus_compatible_with_seven_pairs(pairs[0][0], self_drawn, last_tile)))
+                (
+                    pairs[0][0],
+                    _get_yakus_compatible_with_seven_pairs(
+                        pairs[0][0], self_drawn, last_tile
+                    ),
+                )
+            )
             acceptance.add(hand.drawn_tile)
 
     # check knitted
     knitted = _check_knitted(hand)
     if knitted:
-        return _get_yakus_compatible_with_knitted(hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind)
+        return _get_yakus_compatible_with_knitted(
+            hand, knitted, self_drawn, last_tile, prevalent_wind, seat_wind
+        )
 
     acceptance.update(_get_acceptance(hand))
-    tenpai_hands, regular_won_hands = _get_all_tenpai_forms(hand)
+    _, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
-            context = _get_context(hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)
+            context = _get_context(
+                hand,
+                won_hand,
+                acceptance,
+                self_drawn,
+                last_tile,
+                prevalent_wind,
+                seat_wind,
+            )
             won_hands_scores.append((won_hand, _get_standard_hand_yakus(context)))
-    best_pattern = max(won_hands_scores, key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]))
+    best_pattern = max(
+        won_hands_scores,
+        key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]),
+    )
     return acceptance, best_pattern[0], best_pattern[1]
 
 
@@ -402,141 +515,185 @@ def _get_ordinal_yakus(yakus):
 
 def _test_scorer():
     tests = {
-        "123456789p22!333m": _get_ordinal_yakus([
-            (MahjongMCRYaku.PURE_STRAIGHT, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
-            (MahjongMCRYaku.NO_HONOR, 1),
-        ]),
-        "123!789p123m789s77z": _get_ordinal_yakus([
-            (MahjongMCRYaku.OUTSIDE_HAND, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.MIXED_DOUBLE_CHOW, 2),
-            (MahjongMCRYaku.TWO_TERMINAL_CHOWS, 1),
-            (MahjongMCRYaku.EDGE_WAIT, 1),
-        ]),
-        "(111)33!p(999)s111777z": _get_ordinal_yakus([
-            (MahjongMCRYaku.ALL_PUNGS, 1),
-            (MahjongMCRYaku.DRAGON_PUNG, 1),
-            (MahjongMCRYaku.PREVALENT_WIND, 1),
-            (MahjongMCRYaku.SEAT_WIND, 1),
-            (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 2),
-            (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
-            (MahjongMCRYaku.SINGLE_WAIT, 1),
-        ]),
-        "(111)33!p111(999)s777z": _get_ordinal_yakus([
-            (MahjongMCRYaku.ALL_PUNGS, 1),
-            (MahjongMCRYaku.DRAGON_PUNG, 1),
-            (MahjongMCRYaku.DOUBLE_PUNGS, 1),
-            (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
-            (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
-            (MahjongMCRYaku.SINGLE_WAIT, 1),
-        ]),
-        "222234444p2!3455s": _get_ordinal_yakus([
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.TILE_HOG, 2),
-            (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.ALL_SIMPLE, 1),
-            (MahjongMCRYaku.MIXED_DOUBLE_CHOW, 1),
-            (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
-        ]),
-        "2!2334455667788s": _get_ordinal_yakus([
-            (MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1),
-            (MahjongMCRYaku.ALL_SIMPLE, 1),
-        ]),
-        "2!2223333444499s": _get_ordinal_yakus([
-            (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
-            (MahjongMCRYaku.FULL_FLUSH, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.ALL_CHOWS, 1),
-        ]),
-        "1112!2345678999s": _get_ordinal_yakus([
-            (MahjongMCRYaku.NINE_GATES, 1),
-            (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.SHORT_STRAIGHT, 1),
-        ]),
-        "1!99s19p19m1234567z": _get_ordinal_yakus([
-            (MahjongMCRYaku.THIRTEEN_ORPHANS, 1),
-        ]),
-        "147s258m369p7!89s11p": _get_ordinal_yakus([
-            (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.ALL_CHOWS, 1),
-            (MahjongMCRYaku.EDGE_WAIT, 1),
-        ]),
-        "147!s258m369p11p(789)s": _get_ordinal_yakus([
-            (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
-            (MahjongMCRYaku.ALL_CHOWS, 1),
-        ]),
-        "147s258m369p2!2277z": _get_ordinal_yakus([
-            (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
-            (MahjongMCRYaku.ALL_TYPES, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 1),
-        ]),
-        "147s258m369p12!457z": _get_ordinal_yakus([
-            (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
-            (MahjongMCRYaku.LESSER_HONORS_AND_KNITTED_TILES, 1),
-        ]),
-        "1s258m369p12!34567z": _get_ordinal_yakus([
-            (MahjongMCRYaku.GREATER_HONORS_AND_KNITTED_TILES, 1),
-        ]),
-        "1111p22s9999m1!166z": _get_ordinal_yakus([
-            (MahjongMCRYaku.SEVEN_PAIRS, 1),
-            (MahjongMCRYaku.ALL_TYPES, 1),
-            (MahjongMCRYaku.TILE_HOG, 2),
-        ]),
-        "222p(345)m2!34789s11z": _get_ordinal_yakus([
-            (MahjongMCRYaku.CHICKEN_HAND, 1),
-        ]),
-        "[1111]s111p(2222)78999!m": _get_ordinal_yakus([
-            (MahjongMCRYaku.OUTSIDE_HAND, 1),
-            (MahjongMCRYaku.CONCEALED_KONG, 1),
-            (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.TWO_MELDED_KONGS, 1),
-            (MahjongMCRYaku.DOUBLE_PUNGS, 1),
-            (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 2),
-            (MahjongMCRYaku.NO_HONOR, 1),
-        ]),
-        "[1111]s111p[1111]55m555!z": _get_ordinal_yakus([
-            (MahjongMCRYaku.THREE_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.TRIPLE_PUNG, 1),
-            (MahjongMCRYaku.TWO_CONCEALED_KONGS, 1),
-            (MahjongMCRYaku.ALL_PUNGS, 1),
-            (MahjongMCRYaku.DRAGON_PUNG, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-            (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
-        ]),
-        "[2222]s[3333]p[5555]77!m555z": _get_ordinal_yakus([
-            (MahjongMCRYaku.FOUR_CONCEALED_PUNGS, 1),
-            (MahjongMCRYaku.THREE_KONGS, 1),
-            (MahjongMCRYaku.DRAGON_PUNG, 1),
-            (MahjongMCRYaku.SINGLE_WAIT, 1),
-        ]),
-        "11112222!334444p": _get_ordinal_yakus([
-            (MahjongMCRYaku.SEVEN_PAIRS, 1),
-            (MahjongMCRYaku.FULL_FLUSH, 1),
-            (MahjongMCRYaku.LOWER_FOUR, 1),
-            (MahjongMCRYaku.REVERSIBLE_TILES, 1),
-            (MahjongMCRYaku.TILE_HOG, 3),
-        ]),
-        "22224444668888s": _get_ordinal_yakus([
-            (MahjongMCRYaku.ALL_GREEN, 1),
-            (MahjongMCRYaku.SEVEN_PAIRS, 1),
-            (MahjongMCRYaku.FULL_FLUSH, 1),
-            (MahjongMCRYaku.REVERSIBLE_TILES, 1),
-            (MahjongMCRYaku.TILE_HOG, 3),
-            (MahjongMCRYaku.ALL_SIMPLE, 1),
-        ]),
-        "11112222333344s": _get_ordinal_yakus([
-            (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
-            (MahjongMCRYaku.FULL_FLUSH, 1),
-            (MahjongMCRYaku.LOWER_FOUR, 1),
-            (MahjongMCRYaku.ALL_CHOWS, 1),
-            (MahjongMCRYaku.CONCEALED_HAND, 1),
-        ]),
+        "123456789p22!333m": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.PURE_STRAIGHT, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
+                (MahjongMCRYaku.NO_HONOR, 1),
+            ]
+        ),
+        "123!789p123m789s77z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.OUTSIDE_HAND, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.MIXED_DOUBLE_CHOW, 2),
+                (MahjongMCRYaku.TWO_TERMINAL_CHOWS, 1),
+                (MahjongMCRYaku.EDGE_WAIT, 1),
+            ]
+        ),
+        "(111)33!p(999)s111777z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.ALL_PUNGS, 1),
+                (MahjongMCRYaku.DRAGON_PUNG, 1),
+                (MahjongMCRYaku.PREVALENT_WIND, 1),
+                (MahjongMCRYaku.SEAT_WIND, 1),
+                (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 2),
+                (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
+                (MahjongMCRYaku.SINGLE_WAIT, 1),
+            ]
+        ),
+        "(111)33!p111(999)s777z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.ALL_PUNGS, 1),
+                (MahjongMCRYaku.DRAGON_PUNG, 1),
+                (MahjongMCRYaku.DOUBLE_PUNGS, 1),
+                (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
+                (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
+                (MahjongMCRYaku.SINGLE_WAIT, 1),
+            ]
+        ),
+        "222234444p2!3455s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.TILE_HOG, 2),
+                (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.ALL_SIMPLE, 1),
+                (MahjongMCRYaku.MIXED_DOUBLE_CHOW, 1),
+                (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
+            ]
+        ),
+        "2!2334455667788s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1),
+                (MahjongMCRYaku.ALL_SIMPLE, 1),
+            ]
+        ),
+        "2!2223333444499s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
+                (MahjongMCRYaku.FULL_FLUSH, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.ALL_CHOWS, 1),
+            ]
+        ),
+        "1112!2345678999s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.NINE_GATES, 1),
+                (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.SHORT_STRAIGHT, 1),
+            ]
+        ),
+        "1!99s19p19m1234567z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.THIRTEEN_ORPHANS, 1),
+            ]
+        ),
+        "147s258m369p7!89s11p": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.ALL_CHOWS, 1),
+                (MahjongMCRYaku.EDGE_WAIT, 1),
+            ]
+        ),
+        "147!s258m369p11p(789)s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
+                (MahjongMCRYaku.ALL_CHOWS, 1),
+            ]
+        ),
+        "147s258m369p2!2277z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
+                (MahjongMCRYaku.ALL_TYPES, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 1),
+            ]
+        ),
+        "147s258m369p12!457z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
+                (MahjongMCRYaku.LESSER_HONORS_AND_KNITTED_TILES, 1),
+            ]
+        ),
+        "1s258m369p12!34567z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.GREATER_HONORS_AND_KNITTED_TILES, 1),
+            ]
+        ),
+        "1111p22s9999m1!166z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.SEVEN_PAIRS, 1),
+                (MahjongMCRYaku.ALL_TYPES, 1),
+                (MahjongMCRYaku.TILE_HOG, 2),
+            ]
+        ),
+        "222p(345)m2!34789s11z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.CHICKEN_HAND, 1),
+            ]
+        ),
+        "[1111]s111p(2222)78999!m": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.OUTSIDE_HAND, 1),
+                (MahjongMCRYaku.CONCEALED_KONG, 1),
+                (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.TWO_MELDED_KONGS, 1),
+                (MahjongMCRYaku.DOUBLE_PUNGS, 1),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 2),
+                (MahjongMCRYaku.NO_HONOR, 1),
+            ]
+        ),
+        "[1111]s111p[1111]55m555!z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.THREE_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.TRIPLE_PUNG, 1),
+                (MahjongMCRYaku.TWO_CONCEALED_KONGS, 1),
+                (MahjongMCRYaku.ALL_PUNGS, 1),
+                (MahjongMCRYaku.DRAGON_PUNG, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
+            ]
+        ),
+        "[2222]s[3333]p[5555]77!m555z": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.FOUR_CONCEALED_PUNGS, 1),
+                (MahjongMCRYaku.THREE_KONGS, 1),
+                (MahjongMCRYaku.DRAGON_PUNG, 1),
+                (MahjongMCRYaku.SINGLE_WAIT, 1),
+            ]
+        ),
+        "11112222!334444p": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.SEVEN_PAIRS, 1),
+                (MahjongMCRYaku.FULL_FLUSH, 1),
+                (MahjongMCRYaku.LOWER_FOUR, 1),
+                (MahjongMCRYaku.REVERSIBLE_TILES, 1),
+                (MahjongMCRYaku.TILE_HOG, 3),
+            ]
+        ),
+        "22224444668888s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.ALL_GREEN, 1),
+                (MahjongMCRYaku.SEVEN_PAIRS, 1),
+                (MahjongMCRYaku.FULL_FLUSH, 1),
+                (MahjongMCRYaku.REVERSIBLE_TILES, 1),
+                (MahjongMCRYaku.TILE_HOG, 3),
+                (MahjongMCRYaku.ALL_SIMPLE, 1),
+            ]
+        ),
+        "11112222333344s": _get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
+                (MahjongMCRYaku.FULL_FLUSH, 1),
+                (MahjongMCRYaku.LOWER_FOUR, 1),
+                (MahjongMCRYaku.ALL_CHOWS, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+            ]
+        ),
     }
 
     for hand_str in tests.keys():
@@ -547,5 +704,5 @@ def _test_scorer():
             print(print_yakus(yakus))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _test_scorer()

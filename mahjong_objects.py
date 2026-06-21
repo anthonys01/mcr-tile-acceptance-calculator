@@ -1,6 +1,7 @@
 """
-    mahjong objects and enum
+mahjong objects and enum
 """
+
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -10,17 +11,20 @@ from typing import Iterable
 
 class Family(Enum):
     """
-        tile families
+    tile families
     """
+
     BAMBOO = "s"
     CHARACTER = "m"
     CIRCLE = "p"
     HONOR = "z"
 
+
 class Constraint(Enum):
     """
-        tile group constraints
+    tile group constraints
     """
+
     NONE = auto()
     ORDINARY = auto()
     NO_HONOR = auto()
@@ -42,8 +46,22 @@ class Constraint(Enum):
     FLUSH_CHARACTER = auto()
 
 
-
-_SYMMETRIC_STR = {"5z", "1p", "2p", "3p", "4p", "5p", "8p", "9p", "2s", "4s", "5s", "6s", "8s", "9s"}
+_SYMMETRIC_STR = {
+    "5z",
+    "1p",
+    "2p",
+    "3p",
+    "4p",
+    "5p",
+    "8p",
+    "9p",
+    "2s",
+    "4s",
+    "5s",
+    "6s",
+    "8s",
+    "9s",
+}
 _GREEN_STR = {"6z", "2s", "3s", "4s", "6s", "8s"}
 
 # count-vector indexing: 0-8 = 1m-9m, 9-17 = 1p-9p, 18-26 = 1s-9s, 27-33 = 1z-7z
@@ -53,23 +71,41 @@ NB_TILE_INDICES = 34
 
 class MahjongTile:
     """
-        tile
+    tile
 
-        Tiles are interned (flyweight): two tiles with the same number and family
-        are guaranteed to be the same object. This makes equality an identity check
-        and lets us precompute the hash and all the boolean predicates once.
+    Tiles are interned (flyweight): two tiles with the same number and family
+    are guaranteed to be the same object. This makes equality an identity check
+    and lets us precompute the hash and all the boolean predicates once.
     """
-    __slots__ = ("number", "family", "_str", "_hash", "index",
-                 "_is_honor", "_is_wind", "_is_dragon",
-                 "_is_symmetric", "_is_green", "_is_even",
-                 "_is_terminal", "_is_ordinary")
+
+    __slots__ = (
+        "number",
+        "family",
+        "_str",
+        "_hash",
+        "index",
+        "_is_honor",
+        "_is_wind",
+        "_is_dragon",
+        "_is_symmetric",
+        "_is_green",
+        "_is_even",
+        "_is_terminal",
+        "_is_ordinary",
+    )
 
     _cache: dict = {}
 
-    def __new__(cls, tile: str=None, *, number: int=-1, family: Family=None):
+    def __new__(
+        cls, tile: str | None = None, *, number: int = -1, family: Family | None = None
+    ):
         if tile:
             number = int(tile[0])
             family = Family(tile[1])
+        if number is None or family is None:
+            raise AttributeError(
+                "either input a valid string or number and family attribute"
+            )
         key = (number, family)
         existing = cls._cache.get(key)
         if existing is not None:
@@ -177,13 +213,14 @@ class MahjongTile:
     def __lt__(self, other):
         return self.index < other.index
 
-EAST = MahjongTile('1z')
-SOUTH = MahjongTile('2z')
-WEST = MahjongTile('3z')
-NORTH = MahjongTile('4z')
-WHITE_DRAGON = MahjongTile('5z')
-GREEN_DRAGON = MahjongTile('6z')
-RED_DRAGON = MahjongTile('7z')
+
+EAST = MahjongTile("1z")
+SOUTH = MahjongTile("2z")
+WEST = MahjongTile("3z")
+NORTH = MahjongTile("4z")
+WHITE_DRAGON = MahjongTile("5z")
+GREEN_DRAGON = MahjongTile("6z")
+RED_DRAGON = MahjongTile("7z")
 
 MahjongTiles = list[MahjongTile]
 MahjongGroup = tuple[MahjongTile, ...]
@@ -191,10 +228,12 @@ MahjongGroups = tuple[MahjongGroup, ...]
 MahjongCombination = tuple[MahjongGroups, MahjongTiles]
 MahjongGroupAndResidue = tuple[MahjongGroup, MahjongTiles, list[Constraint]]
 
+
 class MahjongGroupInstance:
     """
-        represent a mahjong proto-group
+    represent a mahjong proto-group
     """
+
     def __init__(self, group: tuple):
         self.group = group
         self.possible_full_groups: dict[Constraint, list[MahjongGroup]] = {}
@@ -214,13 +253,15 @@ class MahjongGroupInstance:
     def __lt__(self, other):
         return self.group < other.group
 
+
 class MahjongHand:
     """
-        mahjong hand
+    mahjong hand
     """
-    def __init__(self, hand_tiles: MahjongTiles=None, drawn_tile: MahjongTile=None):
+
+    def __init__(self, hand_tiles: MahjongTiles, drawn_tile: MahjongTile | None = None):
         self.hand_tiles: MahjongTiles = hand_tiles
-        self.drawn_tile: MahjongTile = drawn_tile
+        self.drawn_tile: MahjongTile | None = drawn_tile
         self.declared_tiles: set[MahjongGroup] = set()
         self.kongs: set[MahjongGroup] = set()
 
@@ -253,7 +294,9 @@ class MahjongHand:
             tiles.remove(self.drawn_tile)
         return tiles
 
-    def get_missing_tiles_and_residue(self, tiles: Iterable[MahjongTile]) -> tuple[MahjongTiles, MahjongTiles]:
+    def get_missing_tiles_and_residue(
+        self, tiles: Iterable[MahjongTile]
+    ) -> tuple[MahjongTiles, MahjongTiles]:
         """
         get missing tiles in hand for given tiles, and residue after that
         :param tiles: tiles to find
@@ -285,7 +328,9 @@ class MahjongHand:
     def __str__(self):
         rep = ""
         for family in Family:
-            tiles: list[int] = [tile.number for tile in get_tiles_from_family(self.hand_tiles, family)]
+            tiles: list[int] = [
+                tile.number for tile in get_tiles_from_family(self.hand_tiles, family)
+            ]
             if tiles:
                 rep += "".join(str(t) for t in sorted(tiles)) + family.value
         return rep
@@ -327,6 +372,10 @@ INDEX_TO_TILE: tuple = _build_index_table()
 
 @dataclass
 class HandContext:
+    """
+    Mahjong hand precomputed context for yaku analysis
+    """
+
     all_tiles: list[MahjongTile]
     groups: tuple[MahjongGroup, ...]
     pair: MahjongGroup
@@ -340,16 +389,18 @@ class HandContext:
     families: set[Family]
     is_drawn: bool
     winning_tile: MahjongTile
-    prevalent_wind: int = 0   # 1-4 for East-North, 0 if unknown
-    seat_wind: int = 0        # 1-4 for East-North, 0 if unknown
+    prevalent_wind: int = 0  # 1-4 for East-North, 0 if unknown
+    seat_wind: int = 0  # 1-4 for East-North, 0 if unknown
     has_knitted_straight: bool = False
     is_last_tile: bool = False
     # Mutable pools consumed by group-combination yaku checks (highest value first).
     # Once a group is claimed for one combination, it is removed here so lower-value
     # checks cannot reuse those same groups.
     free_chows: list = field(init=False)
-    free_pungs: list = field(init=False)          # combination pool (for Double Pungs etc.)
-    free_pungs_single: list = field(init=False)   # single-group pool (for Dragon Pung, Winds, POTH)
+    free_pungs: list = field(init=False)  # combination pool (for Double Pungs etc.)
+    free_pungs_single: list = field(
+        init=False
+    )  # single-group pool (for Dragon Pung, Winds, POTH)
 
     def __post_init__(self):
         self.free_chows = list(self.chows)
@@ -361,19 +412,24 @@ class HandContext:
 # Helper utilities used by check functions
 # ---------------------------------------------------------------------------
 
-def _concealed_pungs(h: "HandContext") -> list[MahjongGroup]:
-    return [g for g in h.pungs if g not in h.open_pungs and (h.is_drawn or h.winning_tile != g[0])] + _concealed_kongs(h)
+
+def _concealed_pungs(h: HandContext) -> list[MahjongGroup]:
+    return [
+        g
+        for g in h.pungs
+        if g not in h.open_pungs and (h.is_drawn or h.winning_tile != g[0])
+    ] + _concealed_kongs(h)
 
 
-def _concealed_kongs(h: "HandContext") -> list[MahjongGroup]:
+def _concealed_kongs(h: HandContext) -> list[MahjongGroup]:
     return [g for g in h.kongs if g not in h.open_kongs]
 
 
-def _chow_starts_for_family(h: "HandContext", family: Family) -> list[int]:
+def _chow_starts_for_family(h: HandContext, family: Family) -> list[int]:
     return [g[0].number for g in h.chows if g[0].family is family]
 
 
-def _pung_numbers_for_family(h: "HandContext", family: Family) -> list[int]:
+def _pung_numbers_for_family(h: HandContext, family: Family) -> list[int]:
     return [g[0].number for g in h.pungs + h.kongs if g[0].family is family]
 
 
@@ -383,25 +439,18 @@ def _pung_numbers_for_family(h: "HandContext", family: Family) -> list[int]:
 # it matches so that lower-value checks cannot reuse the same groups.
 # ---------------------------------------------------------------------------
 
-def _free_chow_starts_for_family(h: "HandContext", family: Family) -> list[int]:
-    return [g[0].number for g in h.free_chows if g[0].family is family]
 
-
-def _free_pung_numbers_for_family(h: "HandContext", family: Family) -> list[int]:
-    return [g[0].number for g in h.free_pungs if g[0].family is family]
-
-
-def _has_free_chow(h: "HandContext", family: Family, start: int) -> bool:
+def _has_free_chow(h: HandContext, family: Family, start: int) -> bool:
     """Return True if at least one fresh copy of this chow is in the free pool."""
     return any(g[0].family is family and g[0].number == start for g in h.free_chows)
 
 
-def _has_free_pung(h: "HandContext", family: Family, number: int) -> bool:
+def _has_free_pung(h: HandContext, family: Family, number: int) -> bool:
     """Return True if at least one fresh copy of this pung/kong is in the free pool."""
     return any(g[0].family is family and g[0].number == number for g in h.free_pungs)
 
 
-def _take_free_chow(h: "HandContext", family: Family, start: int) -> None:
+def _take_free_chow(h: HandContext, family: Family, start: int) -> None:
     """Remove the first matching chow from the free pool (no-op if already depleted)."""
     for i, g in enumerate(h.free_chows):
         if g[0].family is family and g[0].number == start:
@@ -409,7 +458,7 @@ def _take_free_chow(h: "HandContext", family: Family, start: int) -> None:
             return
 
 
-def _take_free_pung(h: "HandContext", family: Family, number: int) -> None:
+def _take_free_pung(h: HandContext, family: Family, number: int) -> None:
     """Remove the first matching pung/kong from the free pool (no-op if already depleted)."""
     for i, g in enumerate(h.free_pungs):
         if g[0].family is family and g[0].number == number:
@@ -417,12 +466,14 @@ def _take_free_pung(h: "HandContext", family: Family, number: int) -> None:
             return
 
 
-def _has_free_pung_single(h: "HandContext", family: Family, number: int) -> bool:
+def _has_free_pung_single(h: HandContext, family: Family, number: int) -> bool:
     """Return True if at least one fresh copy of this pung/kong is in the single-group pool."""
-    return any(g[0].family is family and g[0].number == number for g in h.free_pungs_single)
+    return any(
+        g[0].family is family and g[0].number == number for g in h.free_pungs_single
+    )
 
 
-def _take_free_pung_single(h: "HandContext", family: Family, number: int) -> None:
+def _take_free_pung_single(h: HandContext, family: Family, number: int) -> None:
     """Remove the first matching pung/kong from the single-group pool (no-op if already depleted)."""
     for i, g in enumerate(h.free_pungs_single):
         if g[0].family is family and g[0].number == number:
@@ -434,15 +485,16 @@ def _take_free_pung_single(h: "HandContext", family: Family, number: int) -> Non
 # Individual check functions
 # ---------------------------------------------------------------------------
 
-def _check_big_four_winds(h: "HandContext") -> bool:
+
+def _check_big_four_winds(h: HandContext) -> bool:
     return sum(1 for g in h.pungs + h.kongs if g[0].is_wind()) == 4
 
 
-def _check_big_three_dragons(h: "HandContext") -> bool:
+def _check_big_three_dragons(h: HandContext) -> bool:
     return sum(1 for g in h.pungs + h.kongs if g[0].is_dragon()) == 3
 
 
-def _check_all_green(h: "HandContext") -> bool:
+def _check_all_green(h: HandContext) -> bool:
     return all(t.is_green() for t in h.all_tiles)
 
 
@@ -450,33 +502,36 @@ def _check_nine_gates(h: HandContext) -> bool:
     return len(h.acceptance) == 9
 
 
-def _check_four_kongs(h: "HandContext") -> bool:
+def _check_four_kongs(h: HandContext) -> bool:
     return len(h.kongs) == 4
 
 
-def _check_all_terminals(h: "HandContext") -> bool:
+def _check_all_terminals(h: HandContext) -> bool:
     return all(t.is_terminal() for t in h.all_tiles)
 
 
-def _check_little_four_winds(h: "HandContext") -> bool:
-    return (sum(1 for g in h.pungs + h.kongs if g[0].is_wind()) == 3
-            and h.pair[0].is_wind())
+def _check_little_four_winds(h: HandContext) -> bool:
+    return (
+        sum(1 for g in h.pungs + h.kongs if g[0].is_wind()) == 3 and h.pair[0].is_wind()
+    )
 
 
-def _check_little_three_dragons(h: "HandContext") -> bool:
-    return (sum(1 for g in h.pungs + h.kongs if g[0].is_dragon()) == 2
-            and h.pair[0].is_dragon())
+def _check_little_three_dragons(h: HandContext) -> bool:
+    return (
+        sum(1 for g in h.pungs + h.kongs if g[0].is_dragon()) == 2
+        and h.pair[0].is_dragon()
+    )
 
 
-def _check_all_honors(h: "HandContext") -> bool:
+def _check_all_honors(h: HandContext) -> bool:
     return all(t.is_honor() for t in h.all_tiles)
 
 
-def _check_four_concealed_pungs(h: "HandContext") -> bool:
+def _check_four_concealed_pungs(h: HandContext) -> bool:
     return len(_concealed_pungs(h)) == 4
 
 
-def _check_pure_terminal_chows(h: "HandContext") -> bool:
+def _check_pure_terminal_chows(h: HandContext) -> bool:
     """2×123 + 2×789 in the same suit, pair of 5 in the same suit."""
     if len(h.chows) != 4:
         return False
@@ -492,7 +547,7 @@ def _check_pure_terminal_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_quadruple_chow(h: "HandContext") -> bool:
+def _check_quadruple_chow(h: HandContext) -> bool:
     c = Counter(h.chows)
     for chow, count in c.items():
         if count >= 4:
@@ -504,13 +559,13 @@ def _check_quadruple_chow(h: "HandContext") -> bool:
     return False
 
 
-def _check_four_pure_shifted_pungs(h: "HandContext") -> bool:
+def _check_four_pure_shifted_pungs(h: HandContext) -> bool:
     """4 pungs/kongs in the same suit with consecutive numbers (step 1)."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         nums = sorted(_pung_numbers_for_family(h, family))
         for i in range(len(nums) - 3):
-            sub = nums[i:i + 4]
-            if sub[1]-sub[0] == 1 and sub[2]-sub[1] == 1 and sub[3]-sub[2] == 1:
+            sub = nums[i : i + 4]
+            if sub[1] - sub[0] == 1 and sub[2] - sub[1] == 1 and sub[3] - sub[2] == 1:
                 if any(_has_free_pung(h, family, n) for n in sub):
                     for n in sub:
                         _take_free_pung(h, family, n)
@@ -518,14 +573,18 @@ def _check_four_pure_shifted_pungs(h: "HandContext") -> bool:
     return False
 
 
-def _check_four_pure_shifted_chows(h: "HandContext") -> bool:
+def _check_four_pure_shifted_chows(h: HandContext) -> bool:
     """4 chows in the same suit, each shifted by the same step (1 or 2)."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         nums = sorted(_chow_starts_for_family(h, family))
         for i in range(len(nums) - 3):
-            sub = nums[i:i + 4]
+            sub = nums[i : i + 4]
             for step in (1, 2):
-                if sub[1]-sub[0] == step and sub[2]-sub[1] == step and sub[3]-sub[2] == step:
+                if (
+                    sub[1] - sub[0] == step
+                    and sub[2] - sub[1] == step
+                    and sub[3] - sub[2] == step
+                ):
                     if any(_has_free_chow(h, family, s) for s in sub):
                         for s in sub:
                             _take_free_chow(h, family, s)
@@ -533,25 +592,27 @@ def _check_four_pure_shifted_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_three_kongs(h: "HandContext") -> bool:
+def _check_three_kongs(h: HandContext) -> bool:
     return len(h.kongs) == 3
 
 
-def _check_all_terminal_and_honors(h: "HandContext") -> bool:
+def _check_all_terminal_and_honors(h: HandContext) -> bool:
     return all(t.is_terminal() or t.is_honor() for t in h.all_tiles)
 
 
-def _check_all_even_pungs(h: "HandContext") -> bool:
-    return (not h.chows
-            and all(g[0].is_even() for g in h.pungs + h.kongs)
-            and h.pair[0].is_even())
+def _check_all_even_pungs(h: HandContext) -> bool:
+    return (
+        not h.chows
+        and all(g[0].is_even() for g in h.pungs + h.kongs)
+        and h.pair[0].is_even()
+    )
 
 
-def _check_full_flush(h: "HandContext") -> bool:
+def _check_full_flush(h: HandContext) -> bool:
     return len(h.families) == 1 and Family.HONOR not in h.families
 
 
-def _check_pure_triple_chow(h: "HandContext") -> bool:
+def _check_pure_triple_chow(h: HandContext) -> bool:
     c = Counter(h.chows)
     for chow, count in c.items():
         if count >= 3:
@@ -563,13 +624,13 @@ def _check_pure_triple_chow(h: "HandContext") -> bool:
     return False
 
 
-def _check_pure_shifted_pungs(h: "HandContext") -> bool:
+def _check_pure_shifted_pungs(h: HandContext) -> bool:
     """3 pungs/kongs in the same suit with consecutive numbers (step 1)."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         nums = sorted(_pung_numbers_for_family(h, family))
         for i in range(len(nums) - 2):
-            sub = nums[i:i + 3]
-            if sub[1]-sub[0] == 1 and sub[2]-sub[1] == 1:
+            sub = nums[i : i + 3]
+            if sub[1] - sub[0] == 1 and sub[2] - sub[1] == 1:
                 if any(_has_free_pung(h, family, n) for n in sub):
                     for n in sub:
                         _take_free_pung(h, family, n)
@@ -577,24 +638,28 @@ def _check_pure_shifted_pungs(h: "HandContext") -> bool:
     return False
 
 
-def _check_upper_tiles(h: "HandContext") -> bool:
+def _check_upper_tiles(h: HandContext) -> bool:
     return all(not t.is_honor() and t.number >= 7 for t in h.all_tiles)
 
 
-def _check_middle_tiles(h: "HandContext") -> bool:
+def _check_middle_tiles(h: HandContext) -> bool:
     return all(not t.is_honor() and 4 <= t.number <= 6 for t in h.all_tiles)
 
 
-def _check_lower_tiles(h: "HandContext") -> bool:
+def _check_lower_tiles(h: HandContext) -> bool:
     return all(not t.is_honor() and t.number <= 3 for t in h.all_tiles)
 
 
-def _check_pure_straight(h: "HandContext") -> bool:
+def _check_pure_straight(h: HandContext) -> bool:
     """123 + 456 + 789 in the same suit. Consumes those 3 chows from the free pool."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         starts = _chow_starts_for_family(h, family)
         if 1 in starts and 4 in starts and 7 in starts:
-            if _has_free_chow(h, family, 1) or _has_free_chow(h, family, 4) or _has_free_chow(h, family, 7):
+            if (
+                _has_free_chow(h, family, 1)
+                or _has_free_chow(h, family, 4)
+                or _has_free_chow(h, family, 7)
+            ):
                 _take_free_chow(h, family, 1)
                 _take_free_chow(h, family, 4)
                 _take_free_chow(h, family, 7)
@@ -602,14 +667,18 @@ def _check_pure_straight(h: "HandContext") -> bool:
     return False
 
 
-def _check_three_suited_terminal_chows(h: "HandContext") -> bool:
+def _check_three_suited_terminal_chows(h: HandContext) -> bool:
     """123+789 in two suits, pair of 5 in the third suit."""
     if len(h.chows) != 4:
         return False
     for pair_fam in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         if h.pair[0].family is not pair_fam or h.pair[0].number != 5:
             continue
-        other = [f for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER) if f is not pair_fam]
+        other = [
+            f
+            for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER)
+            if f is not pair_fam
+        ]
         fa, fb = other[0], other[1]
         all_starts_a = sorted(_chow_starts_for_family(h, fa))
         all_starts_b = sorted(_chow_starts_for_family(h, fb))
@@ -623,14 +692,14 @@ def _check_three_suited_terminal_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_pure_shifted_chows(h: "HandContext") -> bool:
+def _check_pure_shifted_chows(h: HandContext) -> bool:
     """3 chows in the same suit, each shifted by step 1 or 2. Consumes those 3 chows."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         nums = sorted(_chow_starts_for_family(h, family))
         for i in range(len(nums) - 2):
-            sub = nums[i:i + 3]
+            sub = nums[i : i + 3]
             for step in (1, 2):
-                if sub[1]-sub[0] == step and sub[2]-sub[1] == step:
+                if sub[1] - sub[0] == step and sub[2] - sub[1] == step:
                     if any(_has_free_chow(h, family, s) for s in sub):
                         for s in sub:
                             _take_free_chow(h, family, s)
@@ -638,19 +707,20 @@ def _check_pure_shifted_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_all_fives(h: "HandContext") -> bool:
+def _check_all_fives(h: HandContext) -> bool:
     """Every group and the pair contains a 5."""
-    return (any(t.number == 5 for t in h.pair)
-            and all(any(t.number == 5 for t in g) for g in h.groups))
+    return any(t.number == 5 for t in h.pair) and all(
+        any(t.number == 5 for t in g) for g in h.groups
+    )
 
 
-def _check_triple_pung(h: "HandContext") -> bool:
+def _check_triple_pung(h: HandContext) -> bool:
     """3 pungs/kongs of the same number in 3 different suits. Consumes those 3 groups."""
     by_num: dict[int, list] = {}
     for g in h.pungs + h.kongs:
         if not g[0].is_honor():
             by_num.setdefault(g[0].number, []).append(g)
-    for num, groups in by_num.items():
+    for _, groups in by_num.items():
         fams = {g[0].family for g in groups}
         if len(fams) >= 3:
             consumed = []
@@ -668,33 +738,37 @@ def _check_triple_pung(h: "HandContext") -> bool:
     return False
 
 
-def _check_three_concealed_pungs(h: "HandContext") -> bool:
+def _check_three_concealed_pungs(h: HandContext) -> bool:
     return len(_concealed_pungs(h)) >= 3
 
 
-def _check_upper_four(h: "HandContext") -> bool:
+def _check_upper_four(h: HandContext) -> bool:
     return all(not t.is_honor() and t.number >= 6 for t in h.all_tiles)
 
 
-def _check_lower_four(h: "HandContext") -> bool:
+def _check_lower_four(h: HandContext) -> bool:
     return all(not t.is_honor() and t.number <= 4 for t in h.all_tiles)
 
 
-def _check_big_three_winds(h: "HandContext") -> bool:
+def _check_big_three_winds(h: HandContext) -> bool:
     return sum(1 for g in h.pungs + h.kongs if g[0].is_wind()) == 3
 
 
-def _check_mixed_straight(h: "HandContext") -> bool:
+def _check_mixed_straight(h: HandContext) -> bool:
     """123 + 456 + 789, one chow per suit (any assignment of numbers to suits)."""
     chow_by_fam: dict[Family, list[int]] = {}
     for g in h.chows:
         chow_by_fam.setdefault(g[0].family, []).append(g[0].number)
-    fams = [f for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER) if f in chow_by_fam]
+    fams = [
+        f for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER) if f in chow_by_fam
+    ]
     for f1, f2, f3 in permutations(fams, 3):
-        if (1 in chow_by_fam[f1]
-                and 4 in chow_by_fam[f2]
-                and 7 in chow_by_fam[f3]):
-            if _has_free_chow(h, f1, 1) or _has_free_chow(h, f2, 4) or _has_free_chow(h, f3, 7):
+        if 1 in chow_by_fam[f1] and 4 in chow_by_fam[f2] and 7 in chow_by_fam[f3]:
+            if (
+                _has_free_chow(h, f1, 1)
+                or _has_free_chow(h, f2, 4)
+                or _has_free_chow(h, f3, 7)
+            ):
                 _take_free_chow(h, f1, 1)
                 _take_free_chow(h, f2, 4)
                 _take_free_chow(h, f3, 7)
@@ -702,32 +776,39 @@ def _check_mixed_straight(h: "HandContext") -> bool:
     return False
 
 
-def _check_reversible_tiles(h: "HandContext") -> bool:
+def _check_reversible_tiles(h: HandContext) -> bool:
     return all(t.is_symmetric() for t in h.all_tiles)
 
 
-def _check_mixed_triple_chow(h: "HandContext") -> bool:
+def _check_mixed_triple_chow(h: HandContext) -> bool:
     """Same starting number chow in each of the 3 suits. Consumes those 3 chows."""
     chow_by_fam: dict[Family, set[int]] = {}
     for g in h.chows:
         chow_by_fam.setdefault(g[0].family, set()).add(g[0].number)
     for num in range(1, 8):
-        if all(num in chow_by_fam.get(f, set())
-               for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER)):
-            if any(_has_free_chow(h, f, num) for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER)):
+        if all(
+            num in chow_by_fam.get(f, set())
+            for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER)
+        ):
+            if any(
+                _has_free_chow(h, f, num)
+                for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER)
+            ):
                 for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
                     _take_free_chow(h, f, num)
                 return True
     return False
 
 
-def _check_mixed_shifted_pungs(h: "HandContext") -> bool:
+def _check_mixed_shifted_pungs(h: HandContext) -> bool:
     """3 pungs, one in each suit, with consecutive starting numbers. Consumes those 3 groups."""
-    entries = [(g[0].number, g[0].family, g) for g in h.pungs + h.kongs if not g[0].is_honor()]
+    entries = [
+        (g[0].number, g[0].family, g) for g in h.pungs + h.kongs if not g[0].is_honor()
+    ]
     for trio in combinations(range(len(entries)), 3):
         nums = sorted(entries[i][0] for i in trio)
         fams = {entries[i][1] for i in trio}
-        if len(fams) == 3 and nums[1]-nums[0] == 1 and nums[2]-nums[1] == 1:
+        if len(fams) == 3 and nums[1] - nums[0] == 1 and nums[2] - nums[1] == 1:
             consumed = [entries[i][2] for i in trio]
             if any(_has_free_pung(h, g[0].family, g[0].number) for g in consumed):
                 for g in consumed:
@@ -736,24 +817,26 @@ def _check_mixed_shifted_pungs(h: "HandContext") -> bool:
     return False
 
 
-def _check_two_concealed_kongs(h: "HandContext") -> bool:
+def _check_two_concealed_kongs(h: HandContext) -> bool:
     return len(_concealed_kongs(h)) >= 2
 
 
-def _check_all_pungs(h: "HandContext") -> bool:
+def _check_all_pungs(h: HandContext) -> bool:
     return not h.has_knitted_straight and not h.chows
 
 
-def _check_half_flush(h: "HandContext") -> bool:
+def _check_half_flush(h: HandContext) -> bool:
     return len(h.families) == 2 and Family.HONOR in h.families
 
 
-def _check_mixed_shifted_chows(h: "HandContext") -> bool:
+def _check_mixed_shifted_chows(h: HandContext) -> bool:
     """3 chows, one per suit, with consecutive starting numbers (any step 1 or 2). Consumes those 3 chows."""
     chow_by_fam: dict[Family, list[int]] = {}
     for g in h.chows:
         chow_by_fam.setdefault(g[0].family, []).append(g[0].number)
-    fams = [f for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER) if f in chow_by_fam]
+    fams = [
+        f for f in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER) if f in chow_by_fam
+    ]
     if len(fams) < 3:
         return False
     for f1, f2, f3 in permutations(fams, 3):
@@ -761,8 +844,12 @@ def _check_mixed_shifted_chows(h: "HandContext") -> bool:
             for nb in chow_by_fam[f2]:
                 for nc in chow_by_fam[f3]:
                     nums = sorted([na, nb, nc])
-                    if nums[1]-nums[0] == 1 and nums[2]-nums[1] == 1:
-                        if _has_free_chow(h, f1, na) or _has_free_chow(h, f2, nb) or _has_free_chow(h, f3, nc):
+                    if nums[1] - nums[0] == 1 and nums[2] - nums[1] == 1:
+                        if (
+                            _has_free_chow(h, f1, na)
+                            or _has_free_chow(h, f2, nb)
+                            or _has_free_chow(h, f3, nc)
+                        ):
                             _take_free_chow(h, f1, na)
                             _take_free_chow(h, f2, nb)
                             _take_free_chow(h, f3, nc)
@@ -770,7 +857,7 @@ def _check_mixed_shifted_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_all_types(h: "HandContext") -> bool:
+def _check_all_types(h: HandContext) -> bool:
     """Hand contains tiles from all 3 suits + winds + dragons."""
     has_wind = False
     has_dragon = False
@@ -782,38 +869,43 @@ def _check_all_types(h: "HandContext") -> bool:
     return len(h.families) == 4 and has_wind and has_dragon
 
 
-def _check_melded_hand(h: "HandContext") -> bool:
+def _check_melded_hand(h: HandContext) -> bool:
     """All groups are open (melded), won by discard."""
     open_groups = len(h.open_chows) + len(h.open_pungs) + len(h.open_kongs)
     return not h.is_drawn and open_groups == 4
 
 
-def _check_two_dragons_pungs(h: "HandContext") -> bool:
+def _check_two_dragons_pungs(h: HandContext) -> bool:
     return sum(1 for g in h.pungs + h.kongs if g[0].is_dragon()) >= 2
 
 
-def _check_outside_hand(h: "HandContext") -> bool:
+def _check_outside_hand(h: HandContext) -> bool:
     """Every group and the pair contains at least one terminal or honor."""
+
     def _has_toh(group: MahjongGroup) -> bool:
         return any(t.is_terminal() or t.is_honor() for t in group)
-    return not h.has_knitted_straight and _has_toh(h.pair) and all(_has_toh(g) for g in h.groups)
+
+    return (
+        not h.has_knitted_straight
+        and _has_toh(h.pair)
+        and all(_has_toh(g) for g in h.groups)
+    )
 
 
-def _check_fully_concealed(h: "HandContext") -> bool:
+def _check_fully_concealed(h: HandContext) -> bool:
     """All groups concealed, won by self-draw."""
-    return (h.is_drawn
-            and not h.open_chows and not h.open_pungs and not h.open_kongs)
+    return h.is_drawn and not h.open_chows and not h.open_pungs and not h.open_kongs
 
 
-def _check_two_melded_kongs(h: "HandContext") -> bool:
+def _check_two_melded_kongs(h: HandContext) -> bool:
     return len(h.kongs) >= 2
 
 
-def _check_last_tile(h: "HandContext") -> bool:
+def _check_last_tile(h: HandContext) -> bool:
     return h.is_last_tile
 
 
-def _check_dragon_pung(h: "HandContext") -> int:
+def _check_dragon_pung(h: HandContext) -> int:
     """1 or more dragon pungs/kongs. Consumes each from the single-group pool."""
     count = 0
     for g in h.pungs + h.kongs:
@@ -823,7 +915,7 @@ def _check_dragon_pung(h: "HandContext") -> int:
     return count
 
 
-def _check_prevalent_wind(h: "HandContext") -> bool:
+def _check_prevalent_wind(h: HandContext) -> bool:
     if h.prevalent_wind > 0:
         for g in h.pungs + h.kongs:
             if g[0].is_wind() and g[0].number == h.prevalent_wind:
@@ -832,7 +924,7 @@ def _check_prevalent_wind(h: "HandContext") -> bool:
     return False
 
 
-def _check_seat_wind(h: "HandContext") -> bool:
+def _check_seat_wind(h: HandContext) -> bool:
     if h.seat_wind > 0:
         for g in h.pungs + h.kongs:
             if g[0].is_wind() and g[0].number == h.seat_wind:
@@ -841,30 +933,29 @@ def _check_seat_wind(h: "HandContext") -> bool:
     return False
 
 
-def _check_concealed_hand(h: "HandContext") -> bool:
+def _check_concealed_hand(h: HandContext) -> bool:
     """All groups concealed, won by discard."""
-    return (not h.is_drawn
-            and not h.open_chows and not h.open_pungs and not h.open_kongs)
+    return not h.is_drawn and not h.open_chows and not h.open_pungs and not h.open_kongs
 
 
-def _check_all_chows(h: "HandContext") -> bool:
+def _check_all_chows(h: HandContext) -> bool:
     return not h.pungs and not h.kongs and not h.pair[0].is_honor()
 
 
-def _check_tile_hog(h: "HandContext") -> int:
+def _check_tile_hog(h: HandContext) -> int:
     """Count tiles with 4 copies used without declaring a kong."""
     kong_tiles = {g[0] for g in h.kongs}
     c = Counter(h.all_tiles)
     return sum(1 for tile, v in c.items() if v == 4 and tile not in kong_tiles)
 
 
-def _check_double_pungs(h: "HandContext") -> bool:
+def _check_double_pungs(h: HandContext) -> bool:
     """2 pungs of the same number in different suits. Consumes those 2 groups."""
     by_num: dict[int, list] = {}
     for g in h.pungs + h.kongs:
         if not g[0].is_honor():
             by_num.setdefault(g[0].number, []).append(g)
-    for num, groups in by_num.items():
+    for _, groups in by_num.items():
         fams = {g[0].family for g in groups}
         if len(fams) >= 2:
             consumed = []
@@ -882,19 +973,19 @@ def _check_double_pungs(h: "HandContext") -> bool:
     return False
 
 
-def _check_two_concealed_pungs(h: "HandContext") -> bool:
+def _check_two_concealed_pungs(h: HandContext) -> bool:
     return len(_concealed_pungs(h)) >= 2
 
 
-def _check_concealed_kong(h: "HandContext") -> bool:
+def _check_concealed_kong(h: HandContext) -> bool:
     return len(_concealed_kongs(h)) >= 1
 
 
-def _check_all_simple(h: "HandContext") -> bool:
+def _check_all_simple(h: HandContext) -> bool:
     return all(t.is_ordinary() for t in h.all_tiles)
 
 
-def _check_pure_double_chow(h: "HandContext") -> bool:
+def _check_pure_double_chow(h: HandContext) -> bool:
     c = Counter(h.chows)
     for chow, count in c.items():
         if count >= 2:
@@ -906,12 +997,12 @@ def _check_pure_double_chow(h: "HandContext") -> bool:
     return False
 
 
-def _check_mixed_double_chow(h: "HandContext") -> bool:
+def _check_mixed_double_chow(h: HandContext) -> bool:
     """2 chows of the same starting number in different suits. Consumes those 2 chows."""
     by_num: dict[int, list] = {}
     for g in h.chows:
         by_num.setdefault(g[0].number, []).append(g)
-    for num, groups in by_num.items():
+    for _, groups in by_num.items():
         fams = {g[0].family for g in groups}
         if len(fams) >= 2:
             consumed = []
@@ -929,7 +1020,7 @@ def _check_mixed_double_chow(h: "HandContext") -> bool:
     return False
 
 
-def _check_short_straight(h: "HandContext") -> bool:
+def _check_short_straight(h: HandContext) -> bool:
     """2 consecutive chows in the same suit (e.g. 123+456 or 456+789). Consumes those 2 chows."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         starts = sorted(_chow_starts_for_family(h, family))
@@ -943,7 +1034,7 @@ def _check_short_straight(h: "HandContext") -> bool:
     return False
 
 
-def _check_two_terminal_chows(h: "HandContext") -> bool:
+def _check_two_terminal_chows(h: HandContext) -> bool:
     """123 + 789 in the same suit. Consumes those 2 chows."""
     for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
         starts = _chow_starts_for_family(h, family)
@@ -955,30 +1046,32 @@ def _check_two_terminal_chows(h: "HandContext") -> bool:
     return False
 
 
-def _check_pung_of_terminals_or_honors(h: "HandContext") -> int:
+def _check_pung_of_terminals_or_honors(h: HandContext) -> int:
     """Count pungs/kongs of terminals or honors that still have a fresh slot in the single-group pool."""
     count = 0
     for g in h.pungs + h.kongs:
-        if (g[0].is_terminal() or g[0].is_honor()) and _has_free_pung_single(h, g[0].family, g[0].number):
+        if (g[0].is_terminal() or g[0].is_honor()) and _has_free_pung_single(
+            h, g[0].family, g[0].number
+        ):
             _take_free_pung_single(h, g[0].family, g[0].number)
             count += 1
     return count
 
 
-def _check_melded_kong(h: "HandContext") -> bool:
+def _check_melded_kong(h: HandContext) -> bool:
     return len(h.open_kongs) >= 1
 
 
-def _check_one_voided_suit(h: "HandContext") -> bool:
+def _check_one_voided_suit(h: HandContext) -> bool:
     """Tiles come from exactly 2 of the 3 number suits (honors don't count)."""
     return len(h.families - {Family.HONOR}) == 2
 
 
-def _check_no_honor(h: "HandContext") -> bool:
+def _check_no_honor(h: HandContext) -> bool:
     return Family.HONOR not in h.families
 
 
-def _check_edge_wait(h: "HandContext") -> bool:
+def _check_edge_wait(h: HandContext) -> bool:
     """Winning tile is the 3 of a 12X chow, or the 7 of an X89 chow."""
     if len(h.acceptance) > 1:
         return False
@@ -995,7 +1088,7 @@ def _check_edge_wait(h: "HandContext") -> bool:
     return False
 
 
-def _check_closed_wait(h: "HandContext") -> bool:
+def _check_closed_wait(h: HandContext) -> bool:
     """Winning tile is the middle tile of its chow (kanchan wait)."""
     if len(h.acceptance) > 1:
         return False
@@ -1010,20 +1103,21 @@ def _check_closed_wait(h: "HandContext") -> bool:
     return False
 
 
-def _check_single_wait(h: "HandContext") -> bool:
+def _check_single_wait(h: HandContext) -> bool:
     """Winning tile completes the pair (tanki wait)."""
     return len(h.acceptance) == 1 and h.winning_tile in h.pair
 
 
-def _check_self_drawn(h: "HandContext") -> bool:
+def _check_self_drawn(h: HandContext) -> bool:
     return h.is_drawn
 
 
 # Placeholder for yakus that require full scoring context or are special hands
-def _check_not_implemented(_h: "HandContext") -> bool:
+def _check_not_implemented(_: HandContext) -> bool:
     return False
 
 
+# fmt: off
 class MahjongMCRYaku(Enum):
     BIG_FOUR_WIND            = (1,  88, [38, 49, 60, 61, 73], _check_big_four_winds)
     BIG_THREE_DRAGON         = (2,  88, [54, 59],             _check_big_three_dragons)
@@ -1053,7 +1147,7 @@ class MahjongMCRYaku(Enum):
     MIDDLE_TILES             = (26, 24, [68, 76],             _check_middle_tiles)
     LOWER_TILES              = (27, 24, [76],                 _check_lower_tiles)
     PURE_STRAIGHT            = (28, 16, [],                   _check_pure_straight)
-    THREE_SUITED_TERMINAL_CHOWS = (29, 16, [63, 69, 70, 72], _check_three_suited_terminal_chows)
+    THREE_SUITED_TERMINAL_CHOWS = (29, 16, [63, 69, 70, 72],  _check_three_suited_terminal_chows)
     PURE_SHIFTED_CHOWS       = (30, 16, [],                   _check_pure_shifted_chows)
     ALL_FIVES                = (31, 16, [68],                 _check_all_fives)
     TRIPLE_PUNG              = (32, 16, [],                   _check_triple_pung)
@@ -1069,7 +1163,7 @@ class MahjongMCRYaku(Enum):
     MIXED_SHIFTED_PUNGS      = (42, 8,  [],                   _check_mixed_shifted_pungs)
     CHICKEN_HAND             = (43, 8,  [],                   _check_not_implemented)
     # 44, 45, 46, 47 situational
-    TWO_CONCEALED_KONGS      = (48, 8,  [57, 67],                 _check_two_concealed_kongs)
+    TWO_CONCEALED_KONGS      = (48, 8,  [57, 67],             _check_two_concealed_kongs)
     ALL_PUNGS                = (49, 6,  [],                   _check_all_pungs)
     HALF_FLUSH               = (50, 6,  [75],                 _check_half_flush)
     MIXED_SHIFTED_CHOWS      = (51, 6,  [],                   _check_mixed_shifted_chows)
@@ -1103,6 +1197,7 @@ class MahjongMCRYaku(Enum):
     SINGLE_WAIT              = (79, 1,  [],                   _check_single_wait)
     SELF_DRAWN               = (80, 1,  [],                   _check_self_drawn)
     # 81 flowers
+    # fmt: off
 
     @staticmethod
     def get(yaku_id: int):
@@ -1111,7 +1206,7 @@ class MahjongMCRYaku(Enum):
                 return yaku
         raise ValueError(f"Yaku with id {yaku_id} not found")
 
-    def check(self, hand: "HandContext") -> int:
+    def check(self, hand: HandContext) -> int:
         return self.value[3](hand)
 
     def is_multi(self) -> bool:
