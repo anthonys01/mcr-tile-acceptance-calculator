@@ -628,24 +628,27 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles):
 
 
 def _print_best_discard_choice(best_results, results, acceptance, hand):
-    best_discard_tile, acceptance_after_discard = _get_best_discard_choice(
+    best_discard_tile, acceptance_after_discard, acceptance_nb = _get_best_discard_choice(
         best_results, results, acceptance, hand
     )
-    return f"Tile to discard next: {best_discard_tile} (acceptance: {acceptance_after_discard})\n"
+    return f"Tile to discard next: {best_discard_tile} (acceptance: {acceptance_after_discard} -> {acceptance_nb} tiles)\n"
 
 
-def _get_best_discard_choice(best_results, results, acceptance, hand):
+def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHand):
     # tile -> set union des acceptances de tous les types où elle est dans le résidu
     candidate_acceptance: dict[MahjongTile, set] = {}
 
     for best_result in best_results:
-        hand_acceptance = acceptance[best_result]
-        for _, residue in results[best_result]:
+        acceptance_pool = acceptance[best_result]
+        for combination in results[best_result]:
+            _, residue = combination
             for tile in set(residue):
                 if tile not in candidate_acceptance:
                     candidate_acceptance[tile] = set()
-                candidate_acceptance[tile].update(hand_acceptance)  # union
+                hand_full_acceptance = _get_full_tile_acceptance(hand.hand_tiles, [combination])
+                candidate_acceptance[tile].update(hand_full_acceptance.intersection(acceptance_pool))  # union
 
+    print(candidate_acceptance)
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
 
@@ -659,7 +662,7 @@ def _get_best_discard_choice(best_results, results, acceptance, hand):
         if _get_acceptance_tile_number(hand, acc) == best_score
     ]
     to_discard = _get_most_useless_tile_from(best_tiles)
-    return to_discard, candidate_acceptance[to_discard]
+    return to_discard, candidate_acceptance[to_discard], best_score
 
 
 def _precompute_constraints(hand):
@@ -805,6 +808,6 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)45678m(222)334p"))
     # print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
-    # print(analyze_hand_from_string_and_print("(123)m(234)s335p(111)55z"))
+    print(analyze_hand_from_string_and_print("(123)m(234)s334p(111)55z"))
     # print(analyze_hand_from_string_and_print("147m289s346p12347z"))
-    print(analyze_hand_from_string_and_print("147m28899s334566p"))
+    # print(analyze_hand_from_string_and_print("147m28899s334566p"))
