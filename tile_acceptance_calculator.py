@@ -544,7 +544,7 @@ def _can_construct_knitted(
                 best_shanten = shanten
                 best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi_groups)
                 best_result = [((tuple(usable_honor_tiles),), leftover)]
-                best_acceptance = missing
+                best_acceptance = missing + list(set(HONOR_TILES) - set(usable_honor_tiles))
             # and also knitted straight
             shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
             if shanten < best_shanten:
@@ -567,7 +567,6 @@ def _can_construct_knitted(
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[MahjongCombination] = []
     for groups, res in best_result:
-        acceptance.update(set(HONOR_TILES) - set(groups[0]))
         result_to_return.append((tuple(best_combi + list(groups)), res))
     return result_to_return, acceptance
 
@@ -739,7 +738,6 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
         hand_results, hand_acceptance = _can_construct_hand_type(
             hand_type, hand, precomputed, cache
         )
-        print(hand_type, hand_results, hand_acceptance)
         if not hand_results or not hand_results[0]:
             continue
         away = len(hand_results[0][1])
