@@ -83,7 +83,7 @@ def _can_construct_seven_pairs(
     hand: MahjongHand,
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
     if not hand.is_closed_hand():
-        return [((), list(hand.hand_tiles))], set()
+        return [], set()
     acceptance = set()
     all_groups = all_groups_for(hand.hand_tiles, 0, 0, 7)
     if all_groups:
@@ -99,7 +99,7 @@ def _can_construct_all_pungs(hand: MahjongHand):
     if not hand.is_closed_hand():
         for meld in hand.declared_tiles:
             if len(set(meld)) != 1:
-                return [[], list(hand.hand_tiles)], set()
+                return [], set()
     acceptance = set()
     declared_groups = hand.get_all_declared_groups()
     all_groups = all_groups_for(hand.get_free_tiles(), 0, 4 - len(declared_groups), 1)
@@ -219,34 +219,60 @@ def _can_construct_symmetry_from_precomputed(
 
 def _can_construct_all_types(hand: MahjongHand):
     concatenated_results = []
-    acceptance = set()
+    have_family = [False] * 5
+    declared_groups = hand.get_all_declared_groups()
+    tile_check = [
+        lambda t: t.family == Family.CIRCLE,
+        lambda t: t.family == Family.CHARACTER,
+        lambda t: t.family == Family.BAMBOO,
+        lambda t: t.is_wind(),
+        lambda t: t.is_dragon(),
+    ]
 
-    for family in [Family.CIRCLE, Family.CHARACTER, Family.BAMBOO]:
-        concatenated_results, acceptance = _find_groups_and_concatenate(
-            get_tiles_from_family(hand.hand_tiles, family),
+    groups = []
+    useless_tiles = set()
+    for family_index in range(5):
+        for group in declared_groups:
+            if tile_check[family_index](group[0]):
+                if have_family[family_index]:
+                    # too many groups for all types
+                    return [], set()
+                compatible_group = group
+                have_family[family_index] = True
+                useless_tiles.update([tile for tile in hand.get_free_tiles() if tile_check[family_index](tile)])
+                groups.append(compatible_group)
+
+    if groups:
+        concatenated_results = [(tuple(groups), list(useless_tiles))]
+
+    for family_index, family in enumerate([Family.CIRCLE, Family.CHARACTER, Family.BAMBOO]):
+        if have_family[family_index]:
+            continue
+        concatenated_results = _find_groups_and_concatenate(
+            get_tiles_from_family(hand.get_free_tiles(), family),
             concatenated_results,
             FAMILY_TILES[family],
-            acceptance,
         )
 
-    tiles = get_tiles_from_family(hand.hand_tiles, Family.HONOR)
-    concatenated_results, acceptance = _find_groups_and_concatenate(
-        [tile for tile in tiles if tile.is_wind()],
-        concatenated_results,
-        WINDS_TILES,
-        acceptance,
-    )
-    concatenated_results, acceptance = _find_groups_and_concatenate(
-        [tile for tile in tiles if tile.is_dragon()],
-        concatenated_results,
-        DRAGONS_TILES,
-        acceptance,
-    )
-    return concatenated_results, acceptance
+    tiles = get_tiles_from_family(hand.get_free_tiles(), Family.HONOR)
+    if not have_family[3]:
+        concatenated_results = _find_groups_and_concatenate(
+            [tile for tile in tiles if tile.is_wind()],
+            concatenated_results,
+            WINDS_TILES,
+        )
+    if not have_family[4]:
+        concatenated_results = _find_groups_and_concatenate(
+            [tile for tile in tiles if tile.is_dragon()],
+            concatenated_results,
+            DRAGONS_TILES,
+        )
+
+    return concatenated_results, _get_full_tile_acceptance(hand.hand_tiles, concatenated_results)
 
 
 def _find_groups_and_concatenate(
-    tiles, concatenated_results, all_valid_tiles, acceptance
+    tiles, concatenated_results, all_valid_tiles
 ):
     good_groups = []
     if not tiles:
@@ -264,11 +290,8 @@ def _find_groups_and_concatenate(
                 smallest_residue_length = len(residue)
                 good_groups.clear()
             good_groups.append(((group,), residue))
-    acceptance = _get_full_tile_acceptance(
-        tiles, good_groups, other_acceptance=acceptance, allowed_tiles=all_valid_tiles
-    )
     if not concatenated_results:
-        return good_groups, acceptance
+        return good_groups
 
     new_concatenated_results = []
     for found_groups, found_residue in good_groups:
@@ -277,7 +300,7 @@ def _find_groups_and_concatenate(
             new_concatenated_results.append(
                 (merge_group_tuple(groups, new_group), residue + found_residue)
             )
-    return new_concatenated_results, acceptance
+    return new_concatenated_results
 
 
 def _print_shanten(best_groups, natural_size) -> str:
@@ -413,8 +436,6 @@ def _get_full_tile_acceptance(
     :return: tile acceptance set
     """
     acceptance = set()
-    if other_acceptance:
-        acceptance.update(other_acceptance)
     has_empty_group = False
     for groups, _ in combinations:
         acceptance.update(get_tile_acceptance_of_groups(groups))
@@ -430,6 +451,8 @@ def _get_full_tile_acceptance(
                 acceptance.add(tile)
     if allowed_tiles:
         acceptance.intersection_update(allowed_tiles)
+    if other_acceptance:
+        acceptance.update(other_acceptance)
     return acceptance
 
 
@@ -644,19 +667,20 @@ def _precompute_constraints(hand):
         ):
             incompatible_constraints.add(Constraint.FLUSH_CHARACTER)
     constraints = [c for c in constraints if c not in incompatible_constraints]
-    for nb_seq in range(free_groups + 1):
-        for constraint, combinations in all_groups_for_with_constraints(
-            hand.get_free_tiles(), nb_seq, free_groups - nb_seq, 1, constraints
-        ).items():
-            extended_combinations = []
-            for combination in combinations:
-                extended_combinations.append(
-                    (
-                        tuple(list(combination[0]) + list(declared_groups)),
-                        combination[1],
+    if constraints:
+        for nb_seq in range(free_groups + 1):
+            for constraint, combinations in all_groups_for_with_constraints(
+                hand.get_free_tiles(), nb_seq, free_groups - nb_seq, 1, constraints
+            ).items():
+                extended_combinations = []
+                for combination in combinations:
+                    extended_combinations.append(
+                        (
+                            tuple(list(combination[0]) + list(declared_groups)),
+                            combination[1],
+                        )
                     )
-                )
-            best_combinations[constraint] += extended_combinations
+                best_combinations[constraint] += extended_combinations
     return dict(best_combinations)
 
 
@@ -755,4 +779,5 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 
 if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)45678m(222)334p"))
-    print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
+    # print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
+    print(analyze_hand_from_string_and_print("(123)m(234)s335p(111)55z"))
