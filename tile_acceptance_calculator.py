@@ -3,38 +3,25 @@ Tile Acceptance calculator
 """
 
 from enum import Enum
-from itertools import chain
 from typing import Iterable
 
-from group_finder import (
-    all_groups_for,
-    find_sequences,
-    find_three_of_a_kind,
-    merge_group_tuple,
-    all_groups_for_with_constraints,
-    find_simple_waits_for_two_tiles,
-)
+from acceptance import get_tile_acceptance_of_groups
+from hand_types.all_pungs import can_construct_all_pungs
+from hand_types.all_types import can_construct_all_types
+from hand_types.knitted import can_construct_knitted
+from hand_types.precompute import precompute_constraints, can_construct_half_flush_from_precomputed, \
+    can_construct_first_last_hand_from_precomputed, can_construct_symmetry_from_precomputed
+from hand_types.seven_pairs import can_construct_seven_pairs
+from hand_types.three_group_pattern import can_construct_with_3_group_pattern
 from mahjong_objects import (
     MahjongTiles,
     MahjongTile,
     Family,
     MahjongHand,
-    MahjongGroup,
-    Constraint,
-    MahjongGroups,
     MahjongCombination,
     get_tiles_from_family,
 )
-from pattern_generator import pattern_generator
 from tiles_utils import (
-    FAMILY_TILES,
-    HONOR_TILES,
-    FIRST_FOUR_TILES,
-    LAST_FOUR_TILES,
-    WINDS_TILES,
-    DRAGONS_TILES,
-    parse_tiles,
-    SYMMETRIC_TILES,
     parse_hand,
 )
 
@@ -56,251 +43,6 @@ class HandType(Enum):
     KNITTED = "Knitted"
     FIRST_OR_LAST_N_TILES = "First or Last n tiles"
     SYMMETRY = "Symmetry"
-
-
-def _get_read_groups_from_combi_tiles(
-    hand_tiles: MahjongTiles, full_combination: MahjongGroups
-) -> list[MahjongGroup]:
-    return _get_read_groups_from_full_groups(hand_tiles, full_combination)
-
-
-def _get_read_groups_from_full_groups(
-    hand_tiles: MahjongTiles, groups: MahjongGroups
-) -> list[MahjongGroup]:
-    result: list[MahjongGroup] = []
-    tiles_left = list(hand_tiles)
-    for group in groups:
-        new_group = []
-        for tile in group:
-            if tile in tiles_left:
-                tiles_left.remove(tile)
-                new_group.append(tile)
-        result.append(tuple(new_group))
-    return result
-
-
-def _can_construct_seven_pairs(
-    hand: MahjongHand,
-) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    if not hand.is_closed_hand():
-        return [], set()
-    acceptance = set()
-    all_groups = all_groups_for(hand.hand_tiles, 0, 0, 7)
-    if all_groups:
-        groups, residue = all_groups[0]
-        acceptance.update(residue)
-        for group in groups:
-            if len(group) == 1:
-                acceptance.add(group[0])
-    return all_groups, acceptance
-
-
-def _can_construct_all_pungs(hand: MahjongHand):
-    if not hand.is_closed_hand():
-        for meld in hand.declared_tiles:
-            if len(set(meld)) != 1:
-                return [], set()
-    acceptance = set()
-    declared_groups = hand.get_all_declared_groups()
-    all_groups = all_groups_for(hand.get_free_tiles(), 0, 4 - len(declared_groups), 1)
-    if all_groups:
-        groups, residue = all_groups[0]
-        has_lone_group = False
-        for group in groups:
-            if len(group) == 3:
-                continue
-            if len(group) == 2:
-                acceptance.add(group[0])
-            elif len(group) == 1:
-                has_lone_group = True
-                acceptance.add(group[0])
-        if has_lone_group:
-            acceptance.update(residue)
-    extended_all_groups = []
-    for groups, residue in all_groups:
-        extended_all_groups.append(
-            (tuple(list(groups) + list(declared_groups)), residue)
-        )
-    return extended_all_groups, acceptance
-
-
-def _can_construct_half_flush_from_precomputed(
-    hand: MahjongHand, precomputed: dict[Constraint, list[MahjongCombination]]
-):
-    best_groups = _get_best_groups_from_multiple_constraints(
-        [Constraint.FLUSH_CHARACTER, Constraint.FLUSH_CIRCLE, Constraint.FLUSH_BAMBOO],
-        precomputed,
-    )
-
-    if not best_groups:
-        return [], []
-
-    family = _find_example_tile(best_groups[0]).family
-    return best_groups, _get_full_tile_acceptance(
-        hand.hand_tiles, best_groups, allowed_tiles=FAMILY_TILES[family] + HONOR_TILES
-    )
-
-
-def _get_best_groups_from_multiple_constraints(constraints, precomputed):
-    best_combinations = {
-        constraint: precomputed[constraint] for constraint in constraints
-    }
-
-    best_groups = []
-    best_shanten = 14
-    for _, combinations in best_combinations.items():
-        if not combinations:
-            continue
-        real_shanten = min(len(residue) for _, residue in combinations)
-        if real_shanten > best_shanten:
-            continue
-        if real_shanten < best_shanten:
-            best_groups.clear()
-            best_shanten = real_shanten
-        best_groups += [
-            (groups, residue)
-            for groups, residue in combinations
-            if len(residue) == best_shanten
-        ]
-    return best_groups
-
-
-def _has_empty_group(groups):
-    return any(len(group) == 0 for group in groups)
-
-
-def _find_example_tile(combination: MahjongCombination) -> MahjongTile:
-    groups, _ = combination
-    for group in groups:
-        if group:
-            return group[0]
-    raise ValueError("All groups are empty")
-
-
-def _get_first_last_tile_acceptance(hand, best_groups):
-    if _find_example_tile(best_groups[0]) in FIRST_FOUR_TILES:
-        return _get_full_tile_acceptance(
-            hand.hand_tiles, best_groups, allowed_tiles=FIRST_FOUR_TILES
-        )
-    if _find_example_tile(best_groups[0]) in LAST_FOUR_TILES:
-        return _get_full_tile_acceptance(
-            hand.hand_tiles, best_groups, allowed_tiles=LAST_FOUR_TILES
-        )
-    return set()
-
-
-def _can_construct_first_last_hand_from_precomputed(
-    hand: MahjongHand, precomputed: dict[Constraint, list[MahjongCombination]]
-) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    best_groups = _get_best_groups_from_multiple_constraints(
-        [Constraint.FIRST_FOUR, Constraint.LAST_FOUR], precomputed
-    )
-
-    if not best_groups:
-        return [], set()
-
-    return best_groups, _get_first_last_tile_acceptance(hand, best_groups)
-
-
-def _can_construct_symmetry_from_precomputed(
-    hand: MahjongHand, precomputed: dict[Constraint, list[MahjongCombination]]
-) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    best_groups = _get_best_groups_from_multiple_constraints(
-        [Constraint.SYMMETRIC], precomputed
-    )
-
-    if not best_groups:
-        return [], set()
-
-    return best_groups, _get_full_tile_acceptance(
-        hand.hand_tiles, best_groups, allowed_tiles=SYMMETRIC_TILES
-    )
-
-
-def _can_construct_all_types(hand: MahjongHand):
-    concatenated_results = []
-    have_family = [False] * 5
-    declared_groups = hand.get_all_declared_groups()
-    tile_check = [
-        lambda t: t.family == Family.CIRCLE,
-        lambda t: t.family == Family.CHARACTER,
-        lambda t: t.family == Family.BAMBOO,
-        lambda t: t.is_wind(),
-        lambda t: t.is_dragon(),
-    ]
-
-    groups = []
-    useless_tiles = set()
-    for family_index in range(5):
-        for group in declared_groups:
-            if tile_check[family_index](group[0]):
-                if have_family[family_index]:
-                    # too many groups for all types
-                    return [], set()
-                compatible_group = group
-                have_family[family_index] = True
-                useless_tiles.update([tile for tile in hand.get_free_tiles() if tile_check[family_index](tile)])
-                groups.append(compatible_group)
-
-    if groups:
-        concatenated_results = [(tuple(groups), list(useless_tiles))]
-
-    for family_index, family in enumerate([Family.CIRCLE, Family.CHARACTER, Family.BAMBOO]):
-        if have_family[family_index]:
-            continue
-        concatenated_results = _find_groups_and_concatenate(
-            get_tiles_from_family(hand.get_free_tiles(), family),
-            concatenated_results,
-            FAMILY_TILES[family],
-        )
-
-    tiles = get_tiles_from_family(hand.get_free_tiles(), Family.HONOR)
-    if not have_family[3]:
-        concatenated_results = _find_groups_and_concatenate(
-            [tile for tile in tiles if tile.is_wind()],
-            concatenated_results,
-            WINDS_TILES,
-        )
-    if not have_family[4]:
-        concatenated_results = _find_groups_and_concatenate(
-            [tile for tile in tiles if tile.is_dragon()],
-            concatenated_results,
-            DRAGONS_TILES,
-        )
-
-    return concatenated_results, _get_full_tile_acceptance(hand.hand_tiles, concatenated_results)
-
-
-def _find_groups_and_concatenate(
-    tiles, concatenated_results, all_valid_tiles
-):
-    good_groups = []
-    if not tiles:
-        good_groups = [(((),), tiles)]
-    else:
-        smallest_residue_length = 13
-        for group, residue, _ in chain(
-            find_sequences(tiles, [Constraint.NONE]),
-            find_three_of_a_kind(tiles, [Constraint.NONE]),
-        ):
-            residue_length = len(residue)
-            if residue_length > smallest_residue_length:
-                continue
-            if residue_length < smallest_residue_length:
-                smallest_residue_length = len(residue)
-                good_groups.clear()
-            good_groups.append(((group,), residue))
-    if not concatenated_results:
-        return good_groups
-
-    new_concatenated_results = []
-    for found_groups, found_residue in good_groups:
-        new_group = found_groups[0]
-        for groups, residue in concatenated_results:
-            new_concatenated_results.append(
-                (merge_group_tuple(groups, new_group), residue + found_residue)
-            )
-    return new_concatenated_results
 
 
 def _print_shanten(best_groups, natural_size) -> str:
@@ -339,166 +81,6 @@ def _print_result(best_groups, hand) -> str:
     return to_print
 
 
-def _can_construct_with_3_group_pattern(
-    hand: MahjongHand, input_pattern: str, cache: dict
-) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    best_shanten: int = 13
-    best_result: list[MahjongCombination] = []
-    best_combi: list[MahjongGroup] = []
-    best_acceptance: MahjongTiles = []
-
-    for pattern in pattern_generator(input_pattern):
-        orig_combi = parse_tiles(pattern)
-        orig_combi_groups = (
-            tuple(orig_combi[:3]),
-            tuple(orig_combi[3:6]),
-            tuple(orig_combi[6:]),
-        )
-        other_declared_groups = hand.declared_tiles.difference(set(orig_combi_groups))
-        if len(other_declared_groups) > 1:
-            # combi impossible
-            continue
-        combi = list(orig_combi)
-        to_search = list(orig_combi)
-        for original_group in orig_combi_groups:
-            if original_group in hand.declared_tiles:
-                for tile in original_group:
-                    to_search.remove(tile)
-        missing, tiles = hand.get_missing_tiles_and_residue(to_search)
-        for tile in missing:
-            combi.remove(tile)
-        if len(other_declared_groups) == 1:
-            shanten, result = _can_construct_one_pair_cached(tiles, cache)
-        else:
-            shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
-        if shanten < best_shanten:
-            best_shanten = shanten
-            best_combi = _get_read_groups_from_combi_tiles(
-                combi, orig_combi_groups
-            ) + list(other_declared_groups)
-            best_result = result
-            best_acceptance = missing
-    acceptance: set[MahjongTile] = set(best_acceptance)
-    result_to_return: list[MahjongCombination] = []
-    for groups, res in best_result:
-        acceptance.update(get_tile_acceptance_of_groups(groups))
-        result_to_return.append((tuple(best_combi + list(groups)), res))
-    return result_to_return, acceptance
-
-
-def _is_pair(group: MahjongGroup) -> bool:
-    return len(group) == 2 and group[0] == group[1]
-
-
-def get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
-    acceptance = set()
-    number_of_pairs = sum(_is_pair(group) for group in groups)
-    for group in groups:
-        if len(group) == 3:
-            continue
-        if len(group) == 2:
-            if _is_pair(group) and number_of_pairs == 1:
-                continue
-            acceptance.update(find_simple_waits_for_two_tiles(group))
-        elif len(group) == 0:
-            # not managed here
-            continue
-        elif number_of_pairs > 0:
-            tile_value = group[0].number
-            tile_family = group[0].family
-            if tile_family == Family.HONOR:
-                acceptance.add(group[0])
-            else:
-                for neighbour in range(-2, 3):
-                    if 1 <= tile_value + neighbour <= 9:
-                        acceptance.add(
-                            MahjongTile(
-                                number=tile_value + neighbour, family=tile_family
-                            )
-                        )
-        else:
-            acceptance.add(group[0])
-    return acceptance
-
-
-def _get_full_tile_acceptance(
-    tiles_in_hand: MahjongTiles,
-    combinations: list[MahjongCombination],
-    other_acceptance: set[MahjongTile] | None = None,
-    allowed_tiles: MahjongTiles | None = None,
-):
-    """
-    get tile acceptance of all proto-groups, and if there is an empty group, add all allowed tiles as acceptance
-    :param tiles_in_hand: tiles in hand
-    :param combinations: combinations to compute acceptance from
-    :param other_acceptance: previously calculated acceptance (i.e. from a main combination)
-    :param allowed_tiles: allowed tiles for empty group acceptance
-    :return: tile acceptance set
-    """
-    acceptance = set()
-    has_empty_group = False
-    for groups, _ in combinations:
-        acceptance.update(get_tile_acceptance_of_groups(groups))
-        if _has_empty_group(groups):
-            has_empty_group = True
-    if allowed_tiles and has_empty_group:
-        honor_tiles = get_tiles_from_family(allowed_tiles, Family.HONOR)
-        for tile in honor_tiles:
-            if tile not in acceptance and tiles_in_hand.count(tile) < 2:
-                acceptance.add(tile)
-        for tile in set(allowed_tiles) - set(honor_tiles):
-            if tile not in acceptance and tiles_in_hand.count(tile) < 4:
-                acceptance.add(tile)
-    if allowed_tiles:
-        acceptance.intersection_update(allowed_tiles)
-    if other_acceptance:
-        acceptance.update(other_acceptance)
-    return acceptance
-
-
-def _get_best_groups(
-    best_groups: list[MahjongCombination],
-) -> tuple[int, list[MahjongCombination]]:
-    real_shanten = min(len(residue) for _, residue in best_groups)
-    groups_to_return: list[MahjongCombination] = []
-    for best_group, residue in best_groups:
-        if len(residue) == real_shanten:
-            groups_to_return.append((best_group, residue))
-    return real_shanten, groups_to_return
-
-
-def _can_construct_one_pair(
-    tiles: MahjongTiles,
-) -> tuple[int, list[MahjongCombination]]:
-    return _get_best_groups(all_groups_for(tiles, 0, 0, 1))
-
-
-def _can_construct_one_pair_cached(
-    tiles: MahjongTiles, cache: dict
-) -> tuple[int, list[MahjongCombination]]:
-    key = tuple(sorted(t.index for t in tiles))
-    if key not in cache:
-        cache[key] = _can_construct_one_pair(tiles)
-    return cache[key]
-
-
-def _can_construct_one_group_one_pair(
-    tiles: MahjongTiles,
-) -> tuple[int, list[MahjongCombination]]:
-    best_groups: list[MahjongCombination] = all_groups_for(tiles, 0, 1, 1)
-    best_groups += all_groups_for(tiles, 1, 0, 1)
-    return _get_best_groups(best_groups)
-
-
-def _can_construct_one_group_one_pair_cached(
-    tiles: MahjongTiles, cache: dict
-) -> tuple[int, list[MahjongCombination]]:
-    key = tuple(sorted(t.index for t in tiles))
-    if key not in cache:
-        cache[key] = _can_construct_one_group_one_pair(tiles)
-    return cache[key]
-
-
 def _get_acceptance_tile_number(
     hand: MahjongHand, acceptance_tiles: Iterable[MahjongTile]
 ) -> int:
@@ -508,69 +90,6 @@ def _get_acceptance_tile_number(
     return total
 
 
-def _can_construct_knitted(
-    hand: MahjongHand,
-    cache: dict
-) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    best_shanten: int = 13
-    best_result: list[MahjongCombination] = []
-    best_combi: list[MahjongGroup] = []
-    best_acceptance: MahjongTiles = []
-
-    declared_groups = hand.get_all_declared_groups()
-    if len(declared_groups) > 1:
-        # impossible to build knitted
-        return [], set()
-
-    for pattern in pattern_generator("147a258b369c"):
-        orig_combi = parse_tiles(pattern)
-        orig_combi_groups = (
-            tuple(orig_combi[:3]),
-            tuple(orig_combi[3:6]),
-            tuple(orig_combi[6:]),
-        )
-        combi = list(orig_combi)
-        missing, tiles = hand.get_missing_tiles_and_residue(combi)
-        for tile in missing:
-            combi.remove(tile)
-        if not declared_groups:
-            # can build knitted with honors
-            usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
-            leftover = list(tiles)
-            for tile in usable_honor_tiles:
-                leftover.remove(tile)
-            shanten = len(leftover)
-            if shanten < best_shanten:
-                best_shanten = shanten
-                best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi_groups)
-                best_result = [((tuple(usable_honor_tiles),), leftover)]
-                best_acceptance = missing + list(set(HONOR_TILES) - set(usable_honor_tiles))
-            # and also knitted straight
-            shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
-            if shanten < best_shanten:
-                best_shanten = shanten
-                best_combi = _get_read_groups_from_combi_tiles(
-                    combi, orig_combi_groups
-                ) + list(declared_groups)
-                best_result = result
-                best_acceptance = missing
-        else:
-            # can only build knitted straight
-            shanten, result = _can_construct_one_pair_cached(tiles, cache)
-            if shanten < best_shanten:
-                best_shanten = shanten
-                best_combi = _get_read_groups_from_combi_tiles(
-                    combi, orig_combi_groups
-                ) + list(declared_groups)
-                best_result = result
-                best_acceptance = missing
-    acceptance: set[MahjongTile] = set(best_acceptance)
-    result_to_return: list[MahjongCombination] = []
-    for groups, res in best_result:
-        result_to_return.append((tuple(best_combi + list(groups)), res))
-    return result_to_return, acceptance
-
-
 def _can_construct_hand_type(
     hand_type: HandType, hand: MahjongHand, precomputed, cache: dict
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
@@ -578,43 +97,43 @@ def _can_construct_hand_type(
     acceptance: set[MahjongTile] = set()
     match hand_type:
         case HandType.MIXED_SHIFTED:
-            result, acceptance = _can_construct_with_3_group_pattern(
+            result, acceptance = can_construct_with_3_group_pattern(
                 hand, "ABCaBCDbCDEc", cache
             )
         case HandType.MIXED_STRAIGHT:
-            result, acceptance = _can_construct_with_3_group_pattern(
+            result, acceptance = can_construct_with_3_group_pattern(
                 hand, "123a456b789c", cache
             )
         case HandType.TRIPLE_CHOWS:
-            result, acceptance = _can_construct_with_3_group_pattern(
+            result, acceptance = can_construct_with_3_group_pattern(
                 hand, "ABCaABCbABCc", cache
             )
         case HandType.PURE_SHIFTED:
-            result, acceptance = _can_construct_with_3_group_pattern(
+            result, acceptance = can_construct_with_3_group_pattern(
                 hand, "ABCCDEEFGa", cache
             )
         case HandType.PURE_STRAIGHT:
-            result, acceptance = _can_construct_with_3_group_pattern(
+            result, acceptance = can_construct_with_3_group_pattern(
                 hand, "123456789a", cache
             )
         case HandType.SEVEN_PAIRS:
-            result, acceptance = _can_construct_seven_pairs(hand)
+            result, acceptance = can_construct_seven_pairs(hand)
         case HandType.ALL_PUNGS:
-            result, acceptance = _can_construct_all_pungs(hand)
+            result, acceptance = can_construct_all_pungs(hand)
         case HandType.HALF_FLUSH:
-            result, acceptance = _can_construct_half_flush_from_precomputed(
+            result, acceptance = can_construct_half_flush_from_precomputed(
                 hand, precomputed
             )
         case HandType.ALL_TYPES:
-            result, acceptance = _can_construct_all_types(hand)
+            result, acceptance = can_construct_all_types(hand)
         case HandType.KNITTED:
-            result, acceptance = _can_construct_knitted(hand, cache)
+            result, acceptance = can_construct_knitted(hand, cache)
         case HandType.FIRST_OR_LAST_N_TILES:
-            result, acceptance = _can_construct_first_last_hand_from_precomputed(
+            result, acceptance = can_construct_first_last_hand_from_precomputed(
                 hand, precomputed
             )
         case HandType.SYMMETRY:
-            result, acceptance = _can_construct_symmetry_from_precomputed(
+            result, acceptance = can_construct_symmetry_from_precomputed(
                 hand, precomputed
             )
     return result, acceptance
@@ -640,12 +159,11 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
 
     for best_result in best_results:
         acceptance_pool = acceptance[best_result]
-        for combination in results[best_result]:
-            _, residue = combination
+        for combi, residue in results[best_result]:
             for tile in set(residue):
                 if tile not in candidate_acceptance:
                     candidate_acceptance[tile] = set()
-                hand_full_acceptance = _get_full_tile_acceptance(hand.hand_tiles, [combination])
+                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
                 candidate_acceptance[tile].update(hand_full_acceptance.intersection(acceptance_pool))  # union
 
     print(candidate_acceptance)
@@ -663,54 +181,6 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
     ]
     to_discard = _get_most_useless_tile_from(best_tiles)
     return to_discard, candidate_acceptance[to_discard], best_score
-
-
-def _precompute_constraints(hand):
-    constraints = [
-        Constraint.FLUSH_CHARACTER,
-        Constraint.FLUSH_CIRCLE,
-        Constraint.FLUSH_BAMBOO,
-        Constraint.FIRST_FOUR,
-        Constraint.LAST_FOUR,
-        Constraint.SYMMETRIC,
-    ]
-    best_combinations: dict[Constraint, list[MahjongCombination]] = {
-        constraint: [] for constraint in constraints
-    }
-    declared_groups = hand.get_all_declared_groups()
-    free_groups = 4 - len(declared_groups)
-    incompatible_constraints = set()
-    for group in declared_groups:
-        if any(tile.number > 4 for tile in group):
-            incompatible_constraints.add(Constraint.FIRST_FOUR)
-        if any(tile.number < 6 for tile in group):
-            incompatible_constraints.add(Constraint.LAST_FOUR)
-        if any(not tile.is_symmetric() for tile in group):
-            incompatible_constraints.add(Constraint.SYMMETRIC)
-        if any(not tile.is_compatible_with_half_flush(Family.BAMBOO) for tile in group):
-            incompatible_constraints.add(Constraint.FLUSH_BAMBOO)
-        if any(not tile.is_compatible_with_half_flush(Family.CIRCLE) for tile in group):
-            incompatible_constraints.add(Constraint.FLUSH_CIRCLE)
-        if any(
-            not tile.is_compatible_with_half_flush(Family.CHARACTER) for tile in group
-        ):
-            incompatible_constraints.add(Constraint.FLUSH_CHARACTER)
-    constraints = [c for c in constraints if c not in incompatible_constraints]
-    if constraints:
-        for nb_seq in range(free_groups + 1):
-            for constraint, combinations in all_groups_for_with_constraints(
-                hand.get_free_tiles(), nb_seq, free_groups - nb_seq, 1, constraints
-            ).items():
-                extended_combinations = []
-                for combination in combinations:
-                    extended_combinations.append(
-                        (
-                            tuple(list(combination[0]) + list(declared_groups)),
-                            combination[1],
-                        )
-                    )
-                best_combinations[constraint] += extended_combinations
-    return dict(best_combinations)
 
 
 def analyze_hand(hand: MahjongHand, hand_types=None):
@@ -734,7 +204,7 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
 
     acceptance = {}
 
-    precomputed = _precompute_constraints(hand)
+    precomputed = precompute_constraints(hand)
     cache: dict = {}
 
     for hand_type in hand_types:

@@ -1,5 +1,6 @@
 from typing import Iterable
 
+from acceptance import get_tile_acceptance_of_groups
 from group_finder import all_groups_for
 from mahjong_objects import (
     MahjongGroup,
@@ -11,7 +12,6 @@ from mahjong_objects import (
     MahjongMCRYaku,
     Family,
 )
-from tile_acceptance_calculator import get_tile_acceptance_of_groups
 from tiles_utils import HONOR_TILES, ORPHAN_TILES, parse_hand
 
 
