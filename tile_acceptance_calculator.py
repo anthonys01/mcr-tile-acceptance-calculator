@@ -510,11 +510,17 @@ def _get_acceptance_tile_number(
 
 def _can_construct_knitted(
     hand: MahjongHand,
+    cache: dict
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
     best_combi: list[MahjongGroup] = []
     best_acceptance: MahjongTiles = []
+
+    declared_groups = hand.get_all_declared_groups()
+    if len(declared_groups) > 1:
+        # impossible to build knitted
+        return [], set()
 
     for pattern in pattern_generator("147a258b369c"):
         orig_combi = parse_tiles(pattern)
@@ -527,16 +533,37 @@ def _can_construct_knitted(
         missing, tiles = hand.get_missing_tiles_and_residue(combi)
         for tile in missing:
             combi.remove(tile)
-        usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
-        leftover = list(tiles)
-        for tile in usable_honor_tiles:
-            leftover.remove(tile)
-        shanten = len(leftover)
-        if shanten < best_shanten:
-            best_shanten = shanten
-            best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi_groups)
-            best_result = [((tuple(usable_honor_tiles),), leftover)]
-            best_acceptance = missing
+        if not declared_groups:
+            # can build knitted with honors
+            usable_honor_tiles = set(get_tiles_from_family(tiles, Family.HONOR))
+            leftover = list(tiles)
+            for tile in usable_honor_tiles:
+                leftover.remove(tile)
+            shanten = len(leftover)
+            if shanten < best_shanten:
+                best_shanten = shanten
+                best_combi = _get_read_groups_from_combi_tiles(combi, orig_combi_groups)
+                best_result = [((tuple(usable_honor_tiles),), leftover)]
+                best_acceptance = missing
+            # and also knitted straight
+            shanten, result = _can_construct_one_group_one_pair_cached(tiles, cache)
+            if shanten < best_shanten:
+                best_shanten = shanten
+                best_combi = _get_read_groups_from_combi_tiles(
+                    combi, orig_combi_groups
+                ) + list(declared_groups)
+                best_result = result
+                best_acceptance = missing
+        else:
+            # can only build knitted straight
+            shanten, result = _can_construct_one_pair_cached(tiles, cache)
+            if shanten < best_shanten:
+                best_shanten = shanten
+                best_combi = _get_read_groups_from_combi_tiles(
+                    combi, orig_combi_groups
+                ) + list(declared_groups)
+                best_result = result
+                best_acceptance = missing
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[MahjongCombination] = []
     for groups, res in best_result:
@@ -582,7 +609,7 @@ def _can_construct_hand_type(
         case HandType.ALL_TYPES:
             result, acceptance = _can_construct_all_types(hand)
         case HandType.KNITTED:
-            result, acceptance = _can_construct_knitted(hand)
+            result, acceptance = _can_construct_knitted(hand, cache)
         case HandType.FIRST_OR_LAST_N_TILES:
             result, acceptance = _can_construct_first_last_hand_from_precomputed(
                 hand, precomputed
@@ -780,4 +807,6 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)45678m(222)334p"))
     # print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
-    print(analyze_hand_from_string_and_print("(123)m(234)s335p(111)55z"))
+    # print(analyze_hand_from_string_and_print("(123)m(234)s335p(111)55z"))
+    # print(analyze_hand_from_string_and_print("147m289s346p12347z"))
+    print(analyze_hand_from_string_and_print("147m28899s334566p"))
