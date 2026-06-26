@@ -279,12 +279,22 @@ def get_best_yakus_for_won_hand(
         )
         dep_results = _get_tile_dependent_yakus(dep_context, base_exclusions)
         yakus = _merge_winning_tile_yakus(base_results, dep_results)
+        yakus = _replace_with_chicken_when_relevant(yakus)
         points = get_total_points(yakus)
         if points > best_points:
             best_yakus = yakus
             best_points = points
 
     return best_yakus, best_points
+
+
+def _replace_with_chicken_when_relevant(yakus):
+    """If the basic hand only has CONCEALED_HAND, CHICKEN_HAND is possible just with calling one random group"""
+    if len(yakus) == 1:
+        yaku_val = yakus[0][0]
+        if yaku_val == MahjongMCRYaku.CONCEALED_HAND:
+            return [(MahjongMCRYaku.CHICKEN_HAND, 1)]
+    return yakus
 
 
 def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):

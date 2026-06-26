@@ -314,7 +314,13 @@ def _print_hand_analysis(
     hand, results, acceptance, best_results, display_all, basic_yakus
 ) -> str:
     to_display = results.keys() if display_all else best_results
+    to_display = sorted(to_display, key=lambda t: len(results[t][0][1]))
     printed_result = f"Analyzed hand : {hand}\n"
+    if hand.needs_to_discard():
+        printed_result += "-----------------------------\n"
+        printed_result += _print_best_discard_choice(
+            best_results, results, acceptance, hand
+        )
     for result_type in to_display:
         printed_result += "-----------------------------\n"
         printed_result += result_type + "\n"
@@ -330,10 +336,6 @@ def _print_hand_analysis(
             + f" ({_get_acceptance_tile_number(hand, acceptance[result_type])} tiles)\n"
         )
     printed_result += "-----------------------------\n"
-    if hand.needs_to_discard():
-        printed_result += _print_best_discard_choice(
-            best_results, results, acceptance, hand
-        )
     return printed_result
 
 
@@ -345,5 +347,5 @@ if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("147m28899s334566p"))
     # print(analyze_hand_from_string_and_print("(123)678m667p223s11z"))
     # print(analyze_hand_from_string_and_print("(123)(789)m223s11445z"))
-    # print(analyze_hand_from_string_and_print("123479s67p448m466z"))
-    print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))
+    print(analyze_hand_from_string_and_print("123479s67p448m466z", True))
+    # print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))
