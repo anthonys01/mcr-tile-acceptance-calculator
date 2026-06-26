@@ -325,6 +325,15 @@ class MahjongHand:
         """
         self.hand_tiles.remove(to_discard)
 
+    def clone(self):
+        """
+        create a copy of this hand
+        """
+        copied = MahjongHand(self.hand_tiles.copy(), self.drawn_tile)
+        copied.declared_tiles = self.declared_tiles.copy()
+        copied.kongs = self.kongs.copy()
+        return copied
+
     def __str__(self):
         rep = ""
         for family in Family:

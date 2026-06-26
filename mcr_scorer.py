@@ -440,6 +440,10 @@ def print_yakus(yakus: list[tuple[MahjongMCRYaku, int]]) -> str:
     return "\n".join(result)
 
 
+def get_total_points(yakus):
+    return sum(times * yaku.get_points() for yaku, times in yakus)
+
+
 def get_won_hand_yakus(
     hand,
     self_drawn: bool = False,
@@ -492,21 +496,31 @@ def get_won_hand_yakus(
     _, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
-            context = _get_context(
-                hand,
-                won_hand,
-                acceptance,
-                self_drawn,
-                last_tile,
-                prevalent_wind,
-                seat_wind,
-            )
-            won_hands_scores.append((won_hand, _get_standard_hand_yakus(context)))
+            won_hands_scores.append((won_hand,
+                                     get_won_hand_yakus_for_basic_groups(
+                                         hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)))
     best_pattern = max(
         won_hands_scores,
         key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]),
     )
     return acceptance, best_pattern[0], best_pattern[1]
+
+
+def get_won_hand_yakus_for_basic_groups(hand, won_hand, acceptance=None,
+                                        self_drawn: bool = False, last_tile: bool = False,
+                                        prevalent_wind=0, seat_wind=0):
+    if acceptance is None:
+        acceptance = _get_acceptance(hand)
+    context = _get_context(
+        hand,
+        won_hand,
+        acceptance,
+        self_drawn,
+        last_tile,
+        prevalent_wind,
+        seat_wind,
+    )
+    return _get_standard_hand_yakus(context)
 
 
 def _get_ordinal_yakus(yakus):

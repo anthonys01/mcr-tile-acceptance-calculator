@@ -8,6 +8,7 @@ from typing import Iterable
 from acceptance import get_tile_acceptance_of_groups
 from hand_types.all_pungs import can_construct_all_pungs
 from hand_types.all_types import can_construct_all_types
+from hand_types.basic import can_construct_hand
 from hand_types.knitted import can_construct_knitted
 from hand_types.precompute import precompute_constraints, can_construct_half_flush_from_precomputed, \
     can_construct_first_last_hand_from_precomputed, can_construct_symmetry_from_precomputed
@@ -21,6 +22,7 @@ from mahjong_objects import (
     MahjongCombination,
     get_tiles_from_family,
 )
+from mcr_scorer import print_yakus
 from tiles_utils import (
     parse_hand,
 )
@@ -43,6 +45,7 @@ class HandType(Enum):
     KNITTED = "Knitted"
     FIRST_OR_LAST_N_TILES = "First or Last n tiles"
     SYMMETRY = "Symmetry"
+    BASIC = "Basic"
 
 
 def _print_shanten(best_groups, natural_size) -> str:
@@ -78,6 +81,34 @@ def _print_result(best_groups, hand) -> str:
             lone_tile_groups_nb = lone_tile_groups
         nice_groups.append(possible_hand)
     to_print += "\n".join(str(res) for res in nice_groups[:10]) + "\n...\n"
+    return to_print
+
+
+def _print_result_for_basic(best_groups, hand, basic_yakus) -> str:
+    if not best_groups:
+        return "Too far away"
+    to_print = _print_shanten(best_groups, hand.get_natural_size())
+    if len(best_groups) < 10:
+        to_print += "\n".join(f'{hand} {residue}\nComplete: {won_hand}\n{print_yakus(yakus)}' for (hand, residue), (won_hand, yakus) in zip(best_groups, basic_yakus)) + "\n"
+        return to_print
+
+    lone_tile_groups_nb = 10
+    nice_groups = []
+    for group_index, possible_hand in enumerate(best_groups):
+        hand, residue = possible_hand
+        lone_tile_groups = 0
+        for group in hand:
+            if len(group) <= 1:
+                lone_tile_groups += 1
+        if lone_tile_groups > lone_tile_groups_nb:
+            continue
+        if lone_tile_groups < lone_tile_groups_nb:
+            nice_groups.clear()
+            lone_tile_groups_nb = lone_tile_groups
+        won_hand, yakus = basic_yakus[group_index]
+        nice_groups.append(f'{hand} {residue}\nComplete: {won_hand}\n{print_yakus(yakus)}')
+    to_print += "\n".join(str(res) for res in nice_groups[:10]) + "\n...\n"
+
     return to_print
 
 
@@ -166,7 +197,6 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
                 hand_full_acceptance = get_tile_acceptance_of_groups(combi)
                 candidate_acceptance[tile].update(hand_full_acceptance.intersection(acceptance_pool))  # union
 
-    print(candidate_acceptance)
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
 
@@ -206,11 +236,16 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
 
     precomputed = precompute_constraints(hand)
     cache: dict = {}
+    basic_yakus = []
 
     for hand_type in hand_types:
-        hand_results, hand_acceptance = _can_construct_hand_type(
-            hand_type, hand, precomputed, cache
-        )
+        if hand_type == HandType.BASIC:
+            hand_results, hand_acceptance, yakus = can_construct_hand(hand)
+            basic_yakus.extend(yakus)
+        else:
+            hand_results, hand_acceptance = _can_construct_hand_type(
+                hand_type, hand, precomputed, cache
+            )
         if not hand_results or not hand_results[0]:
             continue
         away = len(hand_results[0][1])
@@ -222,7 +257,7 @@ def analyze_hand(hand: MahjongHand, hand_types=None):
         results[hand_type.value] = hand_results
         acceptance[hand_type.value] = hand_acceptance
 
-    return results, acceptance, best_results, closest_away
+    return results, acceptance, best_results, closest_away, basic_yakus
 
 
 def get_tile_to_discard_from(hand: MahjongHand):
@@ -233,7 +268,7 @@ def get_tile_to_discard_from(hand: MahjongHand):
     """
     if not hand.needs_to_discard():
         raise AttributeError(f"Number of tiles not supported : {len(hand.hand_tiles)}")
-    results, acceptance, best_results, nb_away = analyze_hand(hand)
+    results, acceptance, best_results, nb_away, _ = analyze_hand(hand)
     return (
         _get_best_discard_choice(best_results, results, acceptance, hand),
         nb_away - 1,
@@ -249,19 +284,22 @@ def analyze_hand_from_string_and_print(hand: str, display_all=False) -> str:
     :return: a string containing the analysis
     """
     mahjong_hand = parse_hand(hand)
-    results, acceptance, best_results, _ = analyze_hand(mahjong_hand)
+    results, acceptance, best_results, _, basic_yakus = analyze_hand(mahjong_hand)
     return _print_hand_analysis(
-        mahjong_hand, results, acceptance, best_results, display_all
+        mahjong_hand, results, acceptance, best_results, display_all, basic_yakus
     )
 
 
-def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -> str:
+def _print_hand_analysis(hand, results, acceptance, best_results, display_all, basic_yakus) -> str:
     to_display = results.keys() if display_all else best_results
     printed_result = f"Analyzed hand : {hand}\n"
     for result_type in to_display:
         printed_result += "-----------------------------\n"
         printed_result += result_type + "\n"
-        printed_result += _print_result(results[result_type], hand)
+        if result_type == HandType.BASIC.value:
+            printed_result += _print_result_for_basic(results[result_type], hand, basic_yakus)
+        else:
+            printed_result += _print_result(results[result_type], hand)
         printed_result += (
             "Tile acceptance "
             + str(sorted(acceptance[result_type]))
@@ -278,6 +316,9 @@ def _print_hand_analysis(hand, results, acceptance, best_results, display_all) -
 if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)45678m(222)334p"))
     # print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
-    print(analyze_hand_from_string_and_print("(123)m(234)s334p(111)55z"))
+    # print(analyze_hand_from_string_and_print("(123)m(234)s334p(111)55z"))
     # print(analyze_hand_from_string_and_print("147m289s346p12347z"))
     # print(analyze_hand_from_string_and_print("147m28899s334566p"))
+    # print(analyze_hand_from_string_and_print("(123)678m667p223s11z"))
+    # print(analyze_hand_from_string_and_print("(123)(789)m223s11445z"))
+    print(analyze_hand_from_string_and_print("123479s67p448m466z"))
