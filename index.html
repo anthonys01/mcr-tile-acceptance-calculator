@@ -4,6 +4,18 @@
   <title>Tile acceptance calculator (Pyodide)</title>
 </head>
 <body>
+  <pre id="formatTips" hidden>
+  1-9s = bamboos
+  1-9m = characters
+  1-9p = circles
+  1234z = East - South - West - North
+  567z = White - Green - Red Dragon
+  (234)m = exposed element
+  (4444)z = exposed kong
+  [4444]z = concealed kong
+  Example of valid format: 146(789)m[3333](4444)p14z
+  </pre>
+  <button id="tipsBtn">Format Help</button>
   <input id="textInput" placeholder="Enter hand" type="text">
   <button id="calcBtn" disabled>Calculate</button>
   <br>
@@ -24,6 +36,15 @@
   <label><input id="checkBox" type="checkbox"> Display all results</label>
   <pre id="result"></pre>
 
+  <script>
+    const tipsBtn = document.getElementById("tipsBtn");
+    const formatTips = document.getElementById("formatTips");
+
+    tipsBtn.addEventListener("click", () => {
+      formatTips.hidden = !formatTips.hidden;
+      tipsBtn.textContent = formatTips.hidden ? "Format Help" : "Hide Help";
+    });
+  </script>
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
     async function init() {
