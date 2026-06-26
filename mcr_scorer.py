@@ -155,15 +155,17 @@ def _get_standard_hand_yakus(
     return list(results.items())
 
 
-_TILE_DEPENDENT_YAKUS = frozenset({
-    MahjongMCRYaku.NINE_GATES,
-    MahjongMCRYaku.FOUR_CONCEALED_PUNGS,
-    MahjongMCRYaku.THREE_CONCEALED_PUNGS,
-    MahjongMCRYaku.TWO_CONCEALED_PUNGS,
-    MahjongMCRYaku.EDGE_WAIT,
-    MahjongMCRYaku.CLOSED_WAIT,
-    MahjongMCRYaku.SINGLE_WAIT,
-})
+_TILE_DEPENDENT_YAKUS = frozenset(
+    {
+        MahjongMCRYaku.NINE_GATES,
+        MahjongMCRYaku.FOUR_CONCEALED_PUNGS,
+        MahjongMCRYaku.THREE_CONCEALED_PUNGS,
+        MahjongMCRYaku.TWO_CONCEALED_PUNGS,
+        MahjongMCRYaku.EDGE_WAIT,
+        MahjongMCRYaku.CLOSED_WAIT,
+        MahjongMCRYaku.SINGLE_WAIT,
+    }
+)
 
 
 def _get_tile_independent_yakus_and_exclusions(
@@ -187,7 +189,11 @@ def _get_tile_independent_yakus_and_exclusions(
     while changed:
         changed = False
         for yaku in MahjongMCRYaku:
-            if not yaku.is_multi() or yaku in exclusions or yaku in _TILE_DEPENDENT_YAKUS:
+            if (
+                not yaku.is_multi()
+                or yaku in exclusions
+                or yaku in _TILE_DEPENDENT_YAKUS
+            ):
                 continue
             count = yaku.check(context)
             if count:
@@ -397,11 +403,12 @@ def _get_orphans_acceptance(hand: MahjongHand):
 
 def _check_knitted(hand: MahjongHand) -> MahjongGroups:
     honors_tiles = set(HONOR_TILES).intersection(hand.get_free_tiles())
+    declared_groups = hand.get_all_declared_groups()
     if len(honors_tiles) >= 5 and hand.is_closed_hand():
         _, knitted_tiles = hand.get_missing_tiles_and_residue(honors_tiles)
         if _check_knitted_straight(knitted_tiles):
             return tuple(knitted_tiles), tuple(honors_tiles)
-    if len(hand.declared_tiles.union(hand.kongs)) > 1:
+    if len(declared_groups) > 1:
         return ()
     elif hand.is_closed_hand():
         free_groups: list[MahjongCombination] = all_groups_for(
@@ -418,7 +425,7 @@ def _check_knitted(hand: MahjongHand) -> MahjongGroups:
                 if _check_knitted_straight(residue):
                     return tuple(residue), groups[0], groups[1]
     else:
-        group = list(hand.declared_tiles.union(hand.kongs))[0]
+        group = declared_groups[0]
         for pairs, residue in all_groups_for(hand.get_free_tiles(), 0, 0, 1):
             if pairs and len(pairs[0]) == 2:
                 if _check_knitted_straight(residue):
@@ -622,9 +629,20 @@ def get_won_hand_yakus(
     _, regular_won_hands = _get_all_tenpai_forms(hand)
     if regular_won_hands:
         for won_hand in regular_won_hands:
-            won_hands_scores.append((won_hand,
-                                     get_won_hand_yakus_for_basic_groups(
-                                         hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind)))
+            won_hands_scores.append(
+                (
+                    won_hand,
+                    get_won_hand_yakus_for_basic_groups(
+                        hand,
+                        won_hand,
+                        acceptance,
+                        self_drawn,
+                        last_tile,
+                        prevalent_wind,
+                        seat_wind,
+                    ),
+                )
+            )
     best_pattern = max(
         won_hands_scores,
         key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]),
@@ -632,9 +650,15 @@ def get_won_hand_yakus(
     return acceptance, best_pattern[0], best_pattern[1]
 
 
-def get_won_hand_yakus_for_basic_groups(hand, won_hand, acceptance=None,
-                                        self_drawn: bool = False, last_tile: bool = False,
-                                        prevalent_wind=0, seat_wind=0):
+def get_won_hand_yakus_for_basic_groups(
+    hand,
+    won_hand,
+    acceptance=None,
+    self_drawn: bool = False,
+    last_tile: bool = False,
+    prevalent_wind=0,
+    seat_wind=0,
+):
     if acceptance is None:
         acceptance = _get_acceptance(hand)
     context = _get_context(

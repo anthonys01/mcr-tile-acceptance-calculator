@@ -5,8 +5,23 @@
 </head>
 <body>
   <input id="textInput" placeholder="Enter hand" type="text">
-  <label><input id="checkBox" type="checkbox"> Display all results</label>
   <button id="calcBtn" disabled>Calculate</button>
+  <br>
+  <label><select id="prevalent_wind">
+    <option value="1">East</option>
+    <option value="2">South</option>
+    <option value="3">West</option>
+    <option value="4">North</option>
+  </select> Prevalent Wind</label>
+  <br>
+  <label><select id="seat_wind">
+    <option value="1">East</option>
+    <option value="2">South</option>
+    <option value="3">West</option>
+    <option value="4">North</option>
+  </select> Seat Wind</label>
+  <br>
+  <label><input id="checkBox" type="checkbox"> Display all results</label>
   <pre id="result"></pre>
 
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
@@ -35,11 +50,15 @@
     async function sendData() {
       const input = document.getElementById("textInput").value;
       const checkbox = document.getElementById("checkBox").checked;
+      const prevalent_wind = Number(document.getElementById("prevalent_wind").value);
+      const seat_wind = Number(document.getElementById("seat_wind").value);
       const startTime = performance.now();
       try {
         pyodide.globals.set("user_input", input);
         pyodide.globals.set("display_all", checkbox);
-        const result = await pyodide.runPythonAsync(`from tile_acceptance_calculator import analyze_hand_from_string_and_print\nresult = analyze_hand_from_string_and_print(user_input, display_all)\nresult`);
+        pyodide.globals.set("prevalent_wind", prevalent_wind);
+        pyodide.globals.set("seat_wind", seat_wind);
+        const result = await pyodide.runPythonAsync(`from tile_acceptance_calculator import analyze_hand_from_string_and_print\nresult = analyze_hand_from_string_and_print(user_input, display_all, prevalent_wind, seat_wind)\nresult`);
         const endTime = performance.now();
         const duration = ((endTime - startTime)/1000).toFixed(2);
         document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${result}`;

@@ -7,11 +7,13 @@ from mcr_scorer import get_best_yakus_for_won_hand
 from tiles_utils import parse_hand
 
 
-def can_construct_hand(hand: MahjongHand):
+def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
     acceptance = set()
     possible_hands = []
     kept_yakus = []
-    for comb, added_tiles, yakus, won_hand in get_all_possible_yakus(hand):
+    for comb, added_tiles, yakus, won_hand in get_all_possible_yakus(
+        hand, prevalent_wind, seat_wind
+    ):
         possible_hands.append(comb)
         kept_yakus.append((won_hand, yakus))
         acceptance.update(added_tiles)
@@ -44,7 +46,7 @@ def _compute_acceptance_for_winning_tile(
     return set()
 
 
-def get_all_possible_yakus(hand: MahjongHand):
+def get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
     fastest_hands = []
     best_shanten = 13
     declared_groups = hand.get_all_declared_groups()
@@ -71,11 +73,17 @@ def get_all_possible_yakus(hand: MahjongHand):
             complete_hand.declared_tiles = declared_tiles
             complete_hand.kongs = kongs
             best_yakus, _ = get_best_yakus_for_won_hand(
-                complete_hand, won_hand, list(added_tiles),
+                complete_hand,
+                won_hand,
+                list(added_tiles),
                 _compute_acceptance_for_winning_tile,
+                prevalent_wind=prevalent_wind,
+                seat_wind=seat_wind,
             )
             if best_yakus:
-                results.append(((combination, residue), added_tiles, best_yakus, won_hand))
+                results.append(
+                    ((combination, residue), added_tiles, best_yakus, won_hand)
+                )
     return results
 
 
@@ -101,7 +109,11 @@ def _get_tenpai_hands_from(groups):
         if not _can_be_pair(to_complete[pair_index]):
             continue
         groups = [_complete_pair(to_complete[pair_index])]
-        groups.extend(_complete_proto_group(to_complete[index]) for index in range(len(to_complete)) if index != pair_index)
+        groups.extend(
+            _complete_proto_group(to_complete[index])
+            for index in range(len(to_complete))
+            if index != pair_index
+        )
         for group_tuples in product(*groups):
             new_groups, added_tiles = reduce(_aggregate_group_tuples, group_tuples)
             yield tuple(completed_groups + new_groups), added_tiles
@@ -124,22 +136,38 @@ def _complete_proto_group(proto_group: MahjongGroup):
             biggest_tile = max(tile_1, tile_2)
             if biggest_tile.number - smallest_tile.number == 2:
                 # middle wait
-                middle_tile = MahjongTile(number=smallest_tile.number + 1, family=smallest_tile.family)
-                results.append(([(smallest_tile, middle_tile, biggest_tile)], [middle_tile]))
+                middle_tile = MahjongTile(
+                    number=smallest_tile.number + 1, family=smallest_tile.family
+                )
+                results.append(
+                    ([(smallest_tile, middle_tile, biggest_tile)], [middle_tile])
+                )
             elif biggest_tile.number == 9 and smallest_tile.number == 8:
                 # edge wait
                 edge_tile = MahjongTile(number=7, family=smallest_tile.family)
-                results.append(([(smallest_tile, edge_tile, biggest_tile)], [edge_tile]))
+                results.append(
+                    ([(smallest_tile, edge_tile, biggest_tile)], [edge_tile])
+                )
             elif smallest_tile.number == 1 and biggest_tile.number == 2:
                 # edge wait
                 edge_tile = MahjongTile(number=3, family=smallest_tile.family)
-                results.append(([(smallest_tile, edge_tile, biggest_tile)], [edge_tile]))
+                results.append(
+                    ([(smallest_tile, edge_tile, biggest_tile)], [edge_tile])
+                )
             else:
                 # double wait
-                waiting_1 = MahjongTile(number=smallest_tile.number - 1, family=smallest_tile.family)
-                results.append(([(waiting_1, smallest_tile, biggest_tile)], [waiting_1]))
-                waiting_2 = MahjongTile(number=biggest_tile.number + 1, family=smallest_tile.family)
-                results.append(([(smallest_tile, biggest_tile, waiting_2)], [waiting_2]))
+                waiting_1 = MahjongTile(
+                    number=smallest_tile.number - 1, family=smallest_tile.family
+                )
+                results.append(
+                    ([(waiting_1, smallest_tile, biggest_tile)], [waiting_1])
+                )
+                waiting_2 = MahjongTile(
+                    number=biggest_tile.number + 1, family=smallest_tile.family
+                )
+                results.append(
+                    ([(smallest_tile, biggest_tile, waiting_2)], [waiting_2])
+                )
     elif len(proto_group) == 1:
         minus_2 = None
         minus_1 = None
@@ -172,7 +200,7 @@ def _can_be_pair(group: MahjongGroup):
 def _complete_pair(proto_group: MahjongGroup):
     # TODO verify tile count before generating
     if not _can_be_pair(proto_group):
-        raise AttributeError('Invalid group')
+        raise AttributeError("Invalid group")
     if len(proto_group) == 2:
         return [([proto_group], [])]
     elif len(proto_group) == 1:
@@ -181,5 +209,6 @@ def _complete_pair(proto_group: MahjongGroup):
     return [[()], []]
 
 
-if __name__ == '__main__':
-    print(can_construct_hand(parse_hand('(123)678m667p223s11z')))
+if __name__ == "__main__":
+    print(can_construct_hand(parse_hand("(123)678m667p223s11z")))
+

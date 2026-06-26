@@ -1,12 +1,22 @@
 from acceptance import get_tile_acceptance_of_groups
-from hand_types.common import get_read_groups_from_combi_tiles, can_construct_one_group_one_pair, can_construct_one_pair
-from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile, MahjongGroup, MahjongTiles
+from hand_types.common import (
+    get_read_groups_from_combi_tiles,
+    can_construct_one_group_one_pair,
+    can_construct_one_pair,
+)
+from mahjong_objects import (
+    MahjongHand,
+    MahjongCombination,
+    MahjongTile,
+    MahjongGroup,
+    MahjongTiles,
+)
 from pattern_generator import pattern_generator
 from tiles_utils import parse_tiles
 
 
 def can_construct_with_3_group_pattern(
-        hand: MahjongHand, input_pattern: str, cache: dict
+    hand: MahjongHand, input_pattern: str, cache: dict
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
@@ -20,14 +30,16 @@ def can_construct_with_3_group_pattern(
             tuple(orig_combi[3:6]),
             tuple(orig_combi[6:]),
         )
-        other_declared_groups = hand.declared_tiles.difference(set(orig_combi_groups))
+        other_declared_groups = set(hand.get_all_declared_groups()).difference(
+            set(orig_combi_groups)
+        )
         if len(other_declared_groups) > 1:
             # combi impossible
             continue
         combi = list(orig_combi)
         to_search = list(orig_combi)
         for original_group in orig_combi_groups:
-            if original_group in hand.declared_tiles:
+            if original_group in hand.get_all_declared_groups():
                 for tile in original_group:
                     to_search.remove(tile)
         missing, tiles = hand.get_missing_tiles_and_residue(to_search)
@@ -50,4 +62,3 @@ def can_construct_with_3_group_pattern(
         acceptance.update(get_tile_acceptance_of_groups(groups))
         result_to_return.append((tuple(best_combi + list(groups)), res))
     return result_to_return, acceptance
-
