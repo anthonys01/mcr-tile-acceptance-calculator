@@ -1,9 +1,9 @@
 from functools import cache, reduce
 from itertools import product
 
-from group_finder import all_groups_for
+from group_finder import all_groups_for, find_simple_waits_for_two_tiles
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongGroup, MahjongTile
-from mcr_scorer import get_won_hand_yakus_for_basic_groups, get_total_points
+from mcr_scorer import get_best_yakus_for_won_hand
 from tiles_utils import parse_hand
 
 
@@ -18,15 +18,42 @@ def can_construct_hand(hand: MahjongHand):
     return possible_hands, acceptance, kept_yakus
 
 
+def _compute_acceptance_for_winning_tile(
+    won_hand, winning_tile: MahjongTile
+) -> set[MahjongTile]:
+    """Derive the tenpai acceptance set for a specific winning tile in a complete won_hand.
+
+    Finds the group that contains winning_tile, removes one instance to obtain the
+    proto-group, then returns the tiles that complete it:
+    - 2-tile proto (chow/pung partial): delegated to find_simple_waits_for_two_tiles
+    - 1-tile proto (tanki / pair wait): the tile itself
+    """
+    for group in won_hand:
+        if winning_tile in group:
+            proto = list(group)
+            proto.remove(winning_tile)
+            if len(proto) == 2:
+                p0, p1 = proto
+                # Honor tiles cannot form sequences; a pair of different honor tiles has no wait
+                if p0 != p1 and p0.is_honor():
+                    return set()
+                return find_simple_waits_for_two_tiles(tuple(proto))
+            elif len(proto) == 1:
+                return {proto[0]}
+            return set()
+    return set()
+
+
 def get_all_possible_yakus(hand: MahjongHand):
     fastest_hands = []
     best_shanten = 13
     declared_groups = hand.get_all_declared_groups()
     max_free_groups = 4 - len(declared_groups)
+    free_tiles = hand.get_free_tiles()
     results = []
     for seq in range(max_free_groups + 1):
         free_groups: list[MahjongCombination] = all_groups_for(
-            hand.get_free_tiles(), seq, max_free_groups - seq, 1
+            free_tiles, seq, max_free_groups - seq, 1
         )
         for g, residue in free_groups:
             if len(residue) > best_shanten:
@@ -36,21 +63,19 @@ def get_all_possible_yakus(hand: MahjongHand):
                 fastest_hands.clear()
             groups = declared_groups + list(g)
             fastest_hands.append((groups, residue))
+    declared_tiles = hand.declared_tiles.copy()
+    kongs = hand.kongs.copy()
     for combination, residue in fastest_hands:
         for won_hand, added_tiles in _get_tenpai_hands_from(combination):
-            complete_hand = hand.clone()
-            complete_hand.hand_tiles = _get_flattened_tiles(won_hand)
-            best_yakus = None
-            best_points = 7
-            for winning_tile in added_tiles:
-                complete_hand.drawn_tile = winning_tile
-                yakus = get_won_hand_yakus_for_basic_groups(complete_hand, won_hand)
-                points = get_total_points(yakus)
-                if points > best_points:
-                    best_yakus = yakus
-                    best_points = points
-                if best_yakus:
-                    results.append(((combination, residue), added_tiles, best_yakus, won_hand))
+            complete_hand = MahjongHand(_get_flattened_tiles(won_hand))
+            complete_hand.declared_tiles = declared_tiles
+            complete_hand.kongs = kongs
+            best_yakus, _ = get_best_yakus_for_won_hand(
+                complete_hand, won_hand, list(added_tiles),
+                _compute_acceptance_for_winning_tile,
+            )
+            if best_yakus:
+                results.append(((combination, residue), added_tiles, best_yakus, won_hand))
     return results
 
 

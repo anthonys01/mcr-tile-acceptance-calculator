@@ -155,6 +155,132 @@ def _get_standard_hand_yakus(
     return list(results.items())
 
 
+_TILE_DEPENDENT_YAKUS = frozenset({
+    MahjongMCRYaku.NINE_GATES,
+    MahjongMCRYaku.FOUR_CONCEALED_PUNGS,
+    MahjongMCRYaku.THREE_CONCEALED_PUNGS,
+    MahjongMCRYaku.TWO_CONCEALED_PUNGS,
+    MahjongMCRYaku.EDGE_WAIT,
+    MahjongMCRYaku.CLOSED_WAIT,
+    MahjongMCRYaku.SINGLE_WAIT,
+})
+
+
+def _get_tile_independent_yakus_and_exclusions(
+    context: HandContext,
+) -> tuple[dict, set]:
+    """Compute all yakus that do not depend on winning_tile or acceptance (once per won_hand).
+    Returns (results dict, exclusions set)."""
+    exclusions = set()
+    results: dict = {}
+
+    for yaku in MahjongMCRYaku:
+        if yaku in exclusions or yaku in _TILE_DEPENDENT_YAKUS:
+            continue
+        count = yaku.check(context)
+        if count:
+            results[yaku] = count
+            exclusions.update(yaku.get_exclusions())
+
+    # Fixed-point loop for multi-occurrence yakus (all non-dependent)
+    changed = True
+    while changed:
+        changed = False
+        for yaku in MahjongMCRYaku:
+            if not yaku.is_multi() or yaku in exclusions or yaku in _TILE_DEPENDENT_YAKUS:
+                continue
+            count = yaku.check(context)
+            if count:
+                results[yaku] = results.get(yaku, 0) + count
+                changed = True
+
+    return results, exclusions
+
+
+def _get_tile_dependent_yakus(context: HandContext, base_exclusions: set) -> dict:
+    """Compute only the winning-tile-dependent yakus.  Returns results dict.
+
+    Iterates in enum order to respect intra-dependent exclusion chains
+    (e.g. FOUR_CONCEALED_PUNGS excluding THREE and TWO_CONCEALED_PUNGS).
+    """
+    results: dict = {}
+    exclusions = set(base_exclusions)
+    for yaku in MahjongMCRYaku:
+        if yaku not in _TILE_DEPENDENT_YAKUS or yaku in exclusions:
+            continue
+        count = yaku.check(context)
+        if count:
+            results[yaku] = count
+            exclusions.update(yaku.get_exclusions())
+    return results
+
+
+def _merge_winning_tile_yakus(
+    base_results: dict, dep_results: dict
+) -> list[tuple[MahjongMCRYaku, int]]:
+    """Merge tile-independent and tile-dependent results.
+    Exclusions triggered by dependent yakus override independent results."""
+    dep_exclusions: set = set()
+    for yaku in dep_results:
+        dep_exclusions.update(yaku.get_exclusions())
+
+    merged = {y: c for y, c in base_results.items() if y not in dep_exclusions}
+    merged.update(dep_results)
+
+    if not merged:
+        return [(MahjongMCRYaku.CHICKEN_HAND, 1)]
+    return list(merged.items())
+
+
+def get_best_yakus_for_won_hand(
+    hand: MahjongHand,
+    won_hand,
+    winning_tiles,
+    compute_acceptance,
+    self_drawn: bool = False,
+    last_tile: bool = False,
+    prevalent_wind: int = 0,
+    seat_wind: int = 0,
+) -> tuple[list | None, int]:
+    """Compute the best-scoring yakus across all winning tiles for a given won_hand.
+
+    Optimises by computing tile-independent yakus only once, then merging with
+    per-tile dependent yakus (wait type, concealed pungs) for each winning tile.
+    Returns (best_yakus, best_points); best_yakus is None when no yaku scores above 7.
+    """
+    if not winning_tiles:
+        return None, 0
+
+    # Use the first winning tile to build the base context for the independent pass.
+    # Independent yakus don't consult winning_tile, so the choice is arbitrary.
+    first_tile = winning_tiles[0]
+    hand.drawn_tile = first_tile
+    base_context = _get_context(
+        hand, won_hand, set(), self_drawn, last_tile, prevalent_wind, seat_wind
+    )
+    base_results, base_exclusions = _get_tile_independent_yakus_and_exclusions(
+        base_context
+    )
+
+    best_yakus = None
+    best_points = 7
+
+    for winning_tile in winning_tiles:
+        acceptance = compute_acceptance(won_hand, winning_tile)
+        hand.drawn_tile = winning_tile
+        dep_context = _get_context(
+            hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind
+        )
+        dep_results = _get_tile_dependent_yakus(dep_context, base_exclusions)
+        yakus = _merge_winning_tile_yakus(base_results, dep_results)
+        points = get_total_points(yakus)
+        if points > best_points:
+            best_yakus = yakus
+            best_points = points
+
+    return best_yakus, best_points
+
+
 def _get_yakus_compatible_with_seven_pairs(pairs, self_drawn, last_tile):
     compatible_yakus: list[tuple[MahjongMCRYaku, int]] = [
         (MahjongMCRYaku.SEVEN_PAIRS, 1)
