@@ -264,11 +264,10 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
 
     for hand_type in hand_types:
         if hand_type == HandType.BASIC:
-            # hand_results, hand_acceptance, yakus = can_construct_hand(
-            #     hand, prevalent_wind, seat_wind
-            # )
-            # basic_yakus.extend(yakus)
-            ...
+            hand_results, hand_acceptance, yakus = can_construct_hand(
+                hand, prevalent_wind, seat_wind
+            )
+            basic_yakus.extend(yakus)
         else:
             hand_results, hand_acceptance = _can_construct_hand_type(
                 hand_type, hand, precomputed, cache
