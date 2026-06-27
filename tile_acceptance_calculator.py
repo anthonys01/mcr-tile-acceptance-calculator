@@ -210,7 +210,7 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
                     seven_pair_acceptance = set(acceptance_pool)
                     seven_pair_acceptance.remove(tile)
                     candidate_acceptance[tile].update(seven_pair_acceptance)
-                if best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
+                elif best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
                     # with honors
                     candidate_acceptance[tile].update(acceptance_pool)
                 else:
@@ -361,9 +361,9 @@ if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)678m667p223s11z"))
     # print(analyze_hand_from_string_and_print("(123)(789)m223s11445z"))
     # print(analyze_hand_from_string_and_print("123479s67p448m466z", True))
-    # print(analyze_hand_from_string_and_print("34s4455m668899p77z"))
+    print(analyze_hand_from_string_and_print("34s4455m668899p77z"))
     # print(analyze_hand_from_string_and_print("147m258p369s22334m"))
     # print(analyze_hand_from_string_and_print("13m588p36s124566z"))
     # print(analyze_hand_from_string_and_print("147m258p369s12(333)m"))
-    print(analyze_hand_from_string_and_print("147m258p36s124566z"))
+    # print(analyze_hand_from_string_and_print("147m258p36s124566z"))
     # print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))
