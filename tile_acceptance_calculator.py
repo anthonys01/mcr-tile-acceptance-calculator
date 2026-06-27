@@ -203,7 +203,7 @@ def _print_best_discard_choice(best_results, results, acceptance, hand):
     best_discard_tile, acceptance_after_discard, acceptance_nb = (
         _get_best_discard_choice(best_results, results, acceptance, hand)
     )
-    return f"Tile to discard next: {best_discard_tile} (acceptance: {acceptance_after_discard} -> {acceptance_nb} tiles)\n"
+    return f"Tile to discard next: {best_discard_tile} (acceptance: {sorted(acceptance_after_discard)} -> {acceptance_nb} tiles)\n"
 
 
 def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHand):
@@ -243,6 +243,22 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
     ]
     to_discard = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
     return to_discard, candidate_acceptance[to_discard], best_score
+
+
+def get_simple_acceptance(results, best_results, acceptance):
+    """Concatenate the acceptance from the best results"""
+    simple_acceptance = set()
+    for best_result in best_results:
+        acceptance_pool = acceptance[best_result]
+        for combi, residue in results[best_result]:
+            if best_result == HandType.SEVEN_PAIRS.value or (best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4):
+                simple_acceptance.update(acceptance_pool)
+            else:
+                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
+                simple_acceptance.update(
+                    hand_full_acceptance.intersection(acceptance_pool)
+                )
+    return simple_acceptance
 
 
 def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind=0):
@@ -344,6 +360,11 @@ def _print_hand_analysis(
         printed_result += _print_best_discard_choice(
             best_results, results, acceptance, hand
         )
+    else:
+        printed_result += "-----------------------------\n"
+        full_acceptance = get_simple_acceptance(results, best_results, acceptance)
+        acceptance_nb = _get_acceptance_tile_number(hand, full_acceptance)
+        printed_result += f"Full acceptance: {sorted(full_acceptance)} - {acceptance_nb} tiles\n"
     for result_type in to_display:
         printed_result += "-----------------------------\n"
         printed_result += result_type + "\n"
@@ -377,4 +398,5 @@ if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("147m258p369s12(333)m"))
     # print(analyze_hand_from_string_and_print("147m258p36s124566z"))
     # print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))
-    print(analyze_hand_from_string_and_print("67m344568p345688s"))
+    # print(analyze_hand_from_string_and_print("67m344568p345688s"))
+    print(analyze_hand_from_string_and_print("45s13447m135799p"))
