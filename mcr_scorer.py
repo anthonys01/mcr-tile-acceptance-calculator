@@ -683,13 +683,14 @@ def get_won_hand_yakus_for_basic_groups(
     return _get_standard_hand_yakus(context)
 
 
-def _get_ordinal_yakus(yakus):
+def get_ordinal_yakus(yakus):
+    """Returns hashable comparable tuple of yakus"""
     return tuple(sorted(yakus, key=lambda x: x[0].get_id()))
 
 
 def _test_scorer():
     tests = {
-        "123456789p22!333m": _get_ordinal_yakus(
+        "123456789p22!333m": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.PURE_STRAIGHT, 1),
                 (MahjongMCRYaku.CONCEALED_HAND, 1),
@@ -697,7 +698,7 @@ def _test_scorer():
                 (MahjongMCRYaku.NO_HONOR, 1),
             ]
         ),
-        "123!789p123m789s77z": _get_ordinal_yakus(
+        "123!789p123m789s77z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.OUTSIDE_HAND, 1),
                 (MahjongMCRYaku.CONCEALED_HAND, 1),
@@ -706,7 +707,7 @@ def _test_scorer():
                 (MahjongMCRYaku.EDGE_WAIT, 1),
             ]
         ),
-        "(111)33!p(999)s111777z": _get_ordinal_yakus(
+        "(111)33!p(999)s111777z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.ALL_PUNGS, 1),
                 (MahjongMCRYaku.DRAGON_PUNG, 1),
@@ -716,7 +717,7 @@ def _test_scorer():
                 (MahjongMCRYaku.SINGLE_WAIT, 1),
             ]
         ),
-        "(111)33!p111(999)s777z": _get_ordinal_yakus(
+        "(111)33!p111(999)s777z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.ALL_PUNGS, 1),
                 (MahjongMCRYaku.DRAGON_PUNG, 1),
@@ -727,7 +728,7 @@ def _test_scorer():
                 (MahjongMCRYaku.SINGLE_WAIT, 1),
             ]
         ),
-        "222234444p2!3455s": _get_ordinal_yakus(
+        "222234444p2!3455s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.CONCEALED_HAND, 1),
                 (MahjongMCRYaku.TILE_HOG, 2),
@@ -737,13 +738,13 @@ def _test_scorer():
                 (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
             ]
         ),
-        "2!2334455667788s": _get_ordinal_yakus(
+        "2!2334455667788s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.SEVEN_SHIFTED_PAIRS, 1),
                 (MahjongMCRYaku.ALL_SIMPLE, 1),
             ]
         ),
-        "2!2223333444499s": _get_ordinal_yakus(
+        "2!2223333444499s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
                 (MahjongMCRYaku.FULL_FLUSH, 1),
@@ -751,19 +752,19 @@ def _test_scorer():
                 (MahjongMCRYaku.ALL_CHOWS, 1),
             ]
         ),
-        "1112!2345678999s": _get_ordinal_yakus(
+        "1112!2345678999s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.NINE_GATES, 1),
                 (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
                 (MahjongMCRYaku.SHORT_STRAIGHT, 1),
             ]
         ),
-        "1!99s19p19m1234567z": _get_ordinal_yakus(
+        "1!99s19p19m1234567z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.THIRTEEN_ORPHANS, 1),
             ]
         ),
-        "147s258m369p7!89s11p": _get_ordinal_yakus(
+        "147s258m369p7!89s11p": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
                 (MahjongMCRYaku.CONCEALED_HAND, 1),
@@ -771,13 +772,13 @@ def _test_scorer():
                 (MahjongMCRYaku.EDGE_WAIT, 1),
             ]
         ),
-        "147!s258m369p11p(789)s": _get_ordinal_yakus(
+        "147!s258m369p11p(789)s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
                 (MahjongMCRYaku.ALL_CHOWS, 1),
             ]
         ),
-        "147s258m369p2!2277z": _get_ordinal_yakus(
+        "147s258m369p2!2277z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
                 (MahjongMCRYaku.ALL_TYPES, 1),
@@ -785,30 +786,30 @@ def _test_scorer():
                 (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 1),
             ]
         ),
-        "147s258m369p12!457z": _get_ordinal_yakus(
+        "147s258m369p12!457z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.KNITTED_STRAIGHT, 1),
                 (MahjongMCRYaku.LESSER_HONORS_AND_KNITTED_TILES, 1),
             ]
         ),
-        "1s258m369p12!34567z": _get_ordinal_yakus(
+        "1s258m369p12!34567z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.GREATER_HONORS_AND_KNITTED_TILES, 1),
             ]
         ),
-        "1111p22s9999m1!166z": _get_ordinal_yakus(
+        "1111p22s9999m1!166z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.SEVEN_PAIRS, 1),
                 (MahjongMCRYaku.ALL_TYPES, 1),
                 (MahjongMCRYaku.TILE_HOG, 2),
             ]
         ),
-        "222p(345)m2!34789s11z": _get_ordinal_yakus(
+        "222p(345)m2!34789s11z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.CHICKEN_HAND, 1),
             ]
         ),
-        "[1111]s111p(2222)78999!m": _get_ordinal_yakus(
+        "[1111]s111p(2222)78999!m": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.OUTSIDE_HAND, 1),
                 (MahjongMCRYaku.CONCEALED_KONG, 1),
@@ -819,7 +820,7 @@ def _test_scorer():
                 (MahjongMCRYaku.NO_HONOR, 1),
             ]
         ),
-        "[1111]s111p[1111]55m555!z": _get_ordinal_yakus(
+        "[1111]s111p[1111]55m555!z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.THREE_CONCEALED_PUNGS, 1),
                 (MahjongMCRYaku.TRIPLE_PUNG, 1),
@@ -830,7 +831,7 @@ def _test_scorer():
                 (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
             ]
         ),
-        "[2222]s[3333]p[5555]77!m555z": _get_ordinal_yakus(
+        "[2222]s[3333]p[5555]77!m555z": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.FOUR_CONCEALED_PUNGS, 1),
                 (MahjongMCRYaku.THREE_KONGS, 1),
@@ -838,7 +839,7 @@ def _test_scorer():
                 (MahjongMCRYaku.SINGLE_WAIT, 1),
             ]
         ),
-        "11112222!334444p": _get_ordinal_yakus(
+        "11112222!334444p": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.SEVEN_PAIRS, 1),
                 (MahjongMCRYaku.FULL_FLUSH, 1),
@@ -847,7 +848,7 @@ def _test_scorer():
                 (MahjongMCRYaku.TILE_HOG, 3),
             ]
         ),
-        "22224444668888s": _get_ordinal_yakus(
+        "22224444668888s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.ALL_GREEN, 1),
                 (MahjongMCRYaku.SEVEN_PAIRS, 1),
@@ -857,7 +858,7 @@ def _test_scorer():
                 (MahjongMCRYaku.ALL_SIMPLE, 1),
             ]
         ),
-        "11112222333344s": _get_ordinal_yakus(
+        "11112222333344s": get_ordinal_yakus(
             [
                 (MahjongMCRYaku.QUADRUPLE_CHOW, 1),
                 (MahjongMCRYaku.FULL_FLUSH, 1),
@@ -870,7 +871,7 @@ def _test_scorer():
 
     for hand_str in tests.keys():
         acceptance, won, yakus = get_won_hand_yakus(parse_hand(hand_str))
-        ok = _get_ordinal_yakus(yakus) == tests[hand_str]
+        ok = get_ordinal_yakus(yakus) == tests[hand_str]
         if not ok:
             print(hand_str)
             print(won, acceptance)

@@ -317,6 +317,7 @@ class MahjongHand:
         :param draw_tile: tile to add
         """
         self.hand_tiles.append(draw_tile)
+        self.drawn_tile = draw_tile
 
     def discard(self, to_discard: MahjongTile):
         """
@@ -336,9 +337,15 @@ class MahjongHand:
 
     def __str__(self):
         rep = ""
+        for group in self.declared_tiles:
+            rep += f'({"".join(str(t.number) for t in group)}){group[0].family.value}'
+        for group in self.kongs:
+            if group in self.declared_tiles:
+                continue
+            rep += f'[{"".join(str(t.number) for t in group)}]{group[0].family.value}'
         for family in Family:
             tiles: list[int] = [
-                tile.number for tile in get_tiles_from_family(self.hand_tiles, family)
+                tile.number for tile in get_tiles_from_family(self.get_free_tiles(), family)
             ]
             if tiles:
                 rep += "".join(str(t) for t in sorted(tiles)) + family.value
