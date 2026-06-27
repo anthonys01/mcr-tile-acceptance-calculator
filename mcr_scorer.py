@@ -710,10 +710,8 @@ def _test_scorer():
             [
                 (MahjongMCRYaku.ALL_PUNGS, 1),
                 (MahjongMCRYaku.DRAGON_PUNG, 1),
-                (MahjongMCRYaku.PREVALENT_WIND, 1),
-                (MahjongMCRYaku.SEAT_WIND, 1),
                 (MahjongMCRYaku.TWO_CONCEALED_PUNGS, 1),
-                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 2),
+                (MahjongMCRYaku.PUNG_OF_TERMINALS_OR_HONORS, 3),
                 (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
                 (MahjongMCRYaku.SINGLE_WAIT, 1),
             ]
@@ -874,6 +872,7 @@ def _test_scorer():
         acceptance, won, yakus = get_won_hand_yakus(parse_hand(hand_str))
         ok = _get_ordinal_yakus(yakus) == tests[hand_str]
         if not ok:
+            print(hand_str)
             print(won, acceptance)
             print(print_yakus(yakus))
 

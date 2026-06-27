@@ -206,10 +206,18 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
             for tile in set(residue):
                 if tile not in candidate_acceptance:
                     candidate_acceptance[tile] = set()
-                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
-                candidate_acceptance[tile].update(
-                    hand_full_acceptance.intersection(acceptance_pool)
-                )  # union
+                if best_result == HandType.SEVEN_PAIRS.value:
+                    seven_pair_acceptance = set(acceptance_pool)
+                    seven_pair_acceptance.remove(tile)
+                    candidate_acceptance[tile].update(seven_pair_acceptance)
+                if best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
+                    # with honors
+                    candidate_acceptance[tile].update(acceptance_pool)
+                else:
+                    hand_full_acceptance = get_tile_acceptance_of_groups(combi)
+                    candidate_acceptance[tile].update(
+                        hand_full_acceptance.intersection(acceptance_pool)
+                    )  # union
 
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
@@ -256,10 +264,11 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
 
     for hand_type in hand_types:
         if hand_type == HandType.BASIC:
-            hand_results, hand_acceptance, yakus = can_construct_hand(
-                hand, prevalent_wind, seat_wind
-            )
-            basic_yakus.extend(yakus)
+            # hand_results, hand_acceptance, yakus = can_construct_hand(
+            #     hand, prevalent_wind, seat_wind
+            # )
+            # basic_yakus.extend(yakus)
+            ...
         else:
             hand_results, hand_acceptance = _can_construct_hand_type(
                 hand_type, hand, precomputed, cache
@@ -352,5 +361,10 @@ if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("147m28899s334566p"))
     # print(analyze_hand_from_string_and_print("(123)678m667p223s11z"))
     # print(analyze_hand_from_string_and_print("(123)(789)m223s11445z"))
-    print(analyze_hand_from_string_and_print("123479s67p448m466z", True))
+    # print(analyze_hand_from_string_and_print("123479s67p448m466z", True))
+    # print(analyze_hand_from_string_and_print("34s4455m668899p77z"))
+    # print(analyze_hand_from_string_and_print("147m258p369s22334m"))
+    # print(analyze_hand_from_string_and_print("13m588p36s124566z"))
+    # print(analyze_hand_from_string_and_print("147m258p369s12(333)m"))
+    print(analyze_hand_from_string_and_print("147m258p36s124566z"))
     # print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))

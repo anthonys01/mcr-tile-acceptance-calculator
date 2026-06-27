@@ -1,3 +1,6 @@
+from typing import Iterable
+
+from acceptance import get_tile_acceptance_of_groups
 from hand_types.common import can_construct_one_group_one_pair, can_construct_one_pair, get_read_groups_from_combi_tiles
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile, MahjongGroup, MahjongTiles, Family, \
     get_tiles_from_family
@@ -18,7 +21,7 @@ def can_construct_knitted(
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
     best_combi: list[MahjongGroup] = []
-    best_acceptance: MahjongTiles = []
+    best_acceptance: Iterable[MahjongTile] = []
 
     declared_groups = hand.get_all_declared_groups()
     if len(declared_groups) > 1:
@@ -57,6 +60,8 @@ def can_construct_knitted(
                 ) + list(declared_groups)
                 best_result = result
                 best_acceptance = missing
+                for groups, _ in result:
+                    best_acceptance = get_tile_acceptance_of_groups(groups).union(best_acceptance)
         else:
             # can only build knitted straight
             shanten, result = can_construct_one_pair(tiles, cache)
@@ -67,6 +72,8 @@ def can_construct_knitted(
                 ) + list(declared_groups)
                 best_result = result
                 best_acceptance = missing
+                for groups, _ in result:
+                    best_acceptance = get_tile_acceptance_of_groups(groups).union(best_acceptance)
     acceptance: set[MahjongTile] = set(best_acceptance)
     result_to_return: list[MahjongCombination] = []
     for groups, res in best_result:

@@ -10,7 +10,7 @@ from tiles_utils import parse_hand
 def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
     """Try to construct the fastest 8-point hand following basic acceptance
 
-    Only return result hands when the final point count of the hand is 8 or more
+    Only return result hands when the final point count of the hand is 8 or more, for a basic hand at least 5-shanten
     :param hand: Mahjong hand
     :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
     :param seat_wind: seat wind (1-4) or 0 if unknown
@@ -75,6 +75,8 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
     declared_tiles = hand.declared_tiles.copy()
     kongs = hand.kongs.copy()
     for combination, residue in fastest_hands:
+        if len(residue) > 5:
+            continue
         for won_hand, added_tiles in _get_tenpai_hands_from(combination):
             complete_hand = MahjongHand(_get_flattened_tiles(won_hand))
             complete_hand.declared_tiles = declared_tiles
@@ -216,5 +218,6 @@ def _complete_pair(proto_group: MahjongGroup):
 
 
 if __name__ == "__main__":
-    print(can_construct_hand(parse_hand("256679s259m22378p")))
+    # print(can_construct_hand(parse_hand("256679s259m22378p")))
+    print(can_construct_hand(parse_hand("13m588p344s124566z")))
 
