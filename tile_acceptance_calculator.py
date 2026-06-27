@@ -1,7 +1,7 @@
 """
 Tile Acceptance calculator
 """
-
+from collections import defaultdict
 from enum import Enum
 from typing import Iterable
 
@@ -182,11 +182,21 @@ def _can_construct_hand_type(
     return result, acceptance
 
 
-def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles):
-    honors = get_tiles_from_family(most_useless_tiles, Family.HONOR)
+def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles, candidates_occurrences):
+    max_occurrence = max(
+        len(candidates_occurrences[tile]) for tile in most_useless_tiles
+    )
+    best_candidates = [
+        tile
+        for tile in most_useless_tiles
+        if len(candidates_occurrences[tile]) == max_occurrence
+    ]
+    if len(best_candidates) == 1:
+        return best_candidates[0]
+    honors = get_tiles_from_family(best_candidates, Family.HONOR)
     if honors:
         return honors[0]
-    return sorted(most_useless_tiles, key=lambda tile: abs(5 - tile.number))[-1]
+    return sorted(best_candidates, key=lambda tile: abs(5 - tile.number))[-1]
 
 
 def _print_best_discard_choice(best_results, results, acceptance, hand):
@@ -198,14 +208,14 @@ def _print_best_discard_choice(best_results, results, acceptance, hand):
 
 def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHand):
     # tile -> set union des acceptances de tous les types où elle est dans le résidu
-    candidate_acceptance: dict[MahjongTile, set] = {}
+    candidate_acceptance: dict[MahjongTile, set] = defaultdict(set)
+    candidate_type_occurrence: dict[MahjongTile, set] = defaultdict(set)
 
     for best_result in best_results:
         acceptance_pool = acceptance[best_result]
         for combi, residue in results[best_result]:
             for tile in set(residue):
-                if tile not in candidate_acceptance:
-                    candidate_acceptance[tile] = set()
+                candidate_type_occurrence[tile].add(best_result)
                 if best_result == HandType.SEVEN_PAIRS.value:
                     seven_pair_acceptance = set(acceptance_pool)
                     seven_pair_acceptance.remove(tile)
@@ -231,7 +241,7 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
         for tile, acc in candidate_acceptance.items()
         if _get_acceptance_tile_number(hand, acc) == best_score
     ]
-    to_discard = _get_most_useless_tile_from(best_tiles)
+    to_discard = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
     return to_discard, candidate_acceptance[to_discard], best_score
 
 
@@ -361,9 +371,10 @@ if __name__ == "__main__":
     # print(analyze_hand_from_string_and_print("(123)678m667p223s11z"))
     # print(analyze_hand_from_string_and_print("(123)(789)m223s11445z"))
     # print(analyze_hand_from_string_and_print("123479s67p448m466z", True))
-    print(analyze_hand_from_string_and_print("34s4455m668899p77z"))
+    # print(analyze_hand_from_string_and_print("34s4455m668899p77z"))
     # print(analyze_hand_from_string_and_print("147m258p369s22334m"))
     # print(analyze_hand_from_string_and_print("13m588p36s124566z"))
     # print(analyze_hand_from_string_and_print("147m258p369s12(333)m"))
     # print(analyze_hand_from_string_and_print("147m258p36s124566z"))
     # print(analyze_hand_from_string_and_print("[2222]3p(333)s445m1145z"))
+    print(analyze_hand_from_string_and_print("67m344568p345688s"))
