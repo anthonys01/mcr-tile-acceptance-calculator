@@ -2,7 +2,7 @@
 mahjong objects and enum
 """
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from itertools import combinations, permutations
@@ -337,18 +337,24 @@ class MahjongHand:
 
     def __str__(self):
         rep = ""
+        groups_by_family = defaultdict(list)
         for group in self.declared_tiles:
-            rep += f'({"".join(str(t.number) for t in group)}){group[0].family.value}'
+            groups_by_family[group[0].family].append('(' + "".join(str(t.number) for t in group) + ')')
         for group in self.kongs:
             if group in self.declared_tiles:
                 continue
-            rep += f'[{"".join(str(t.number) for t in group)}]{group[0].family.value}'
+            groups_by_family[group[0].family].append('[' + "".join(str(t.number) for t in group) + ']')
         for family in Family:
             tiles: list[int] = [
                 tile.number for tile in get_tiles_from_family(self.get_free_tiles(), family)
             ]
+            declared = groups_by_family[family]
+            if declared:
+                rep += "".join(sorted(declared))
             if tiles:
-                rep += "".join(str(t) for t in sorted(tiles)) + family.value
+                rep += "".join(str(t) for t in sorted(tiles))
+            if declared or tiles:
+                rep += family.value
         return rep
 
     def __repr__(self):
