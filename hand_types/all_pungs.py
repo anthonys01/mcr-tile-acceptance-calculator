@@ -3,6 +3,11 @@ from mahjong_objects import MahjongHand
 
 
 def can_construct_all_pungs(hand: MahjongHand):
+    """Try to construct all pungs
+
+    Only return result hands when all pungs is technically possible (no chow declared)
+    :param hand: Mahjong hand
+    """
     if not hand.is_closed_hand():
         for meld in hand.declared_tiles:
             if len(set(meld)) != 1:

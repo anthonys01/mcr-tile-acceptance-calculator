@@ -8,10 +8,17 @@ from tiles_utils import parse_hand
 
 
 def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
+    """Try to construct the fastest 8-point hand following basic acceptance
+
+    Only return result hands when the final point count of the hand is 8 or more
+    :param hand: Mahjong hand
+    :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
+    :param seat_wind: seat wind (1-4) or 0 if unknown
+    """
     acceptance = set()
     possible_hands = []
     kept_yakus = []
-    for comb, added_tiles, yakus, won_hand in get_all_possible_yakus(
+    for comb, added_tiles, yakus, won_hand in _get_all_possible_yakus(
         hand, prevalent_wind, seat_wind
     ):
         possible_hands.append(comb)
@@ -46,7 +53,7 @@ def _compute_acceptance_for_winning_tile(
     return set()
 
 
-def get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
+def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
     fastest_hands = []
     best_shanten = 13
     declared_groups = hand.get_all_declared_groups()
@@ -205,7 +212,6 @@ def _complete_pair(proto_group: MahjongGroup):
         return [([proto_group], [])]
     elif len(proto_group) == 1:
         return [([(proto_group[0], proto_group[0])], [proto_group[0]])]
-    # TODO empty proto group
     return [[()], []]
 
 

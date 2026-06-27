@@ -18,6 +18,13 @@ from tiles_utils import parse_tiles
 def can_construct_with_3_group_pattern(
     hand: MahjongHand, input_pattern: str, cache: dict
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
+    """Try to construct the given three groups pattern
+
+    Only return result hands when the pattern is technically possible (at most one declared group that does not belong to the pattern)
+    :param hand: Mahjong hand
+    :param input_pattern: the input pattern, see pattern_generator for the format
+    :param cache: global cache for the leftover pair or element + pair
+    """
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
     best_combi: list[MahjongGroup] = []

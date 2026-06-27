@@ -5,7 +5,12 @@ from mahjong_objects import MahjongHand, MahjongCombination, MahjongTile
 def can_construct_seven_pairs(
         hand: MahjongHand,
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
-    if not hand.is_closed_hand():
+    """Try to construct seven pairs
+
+    Only return result hands when seven pairs is technically possible (closed hand, no concealed kong)
+    :param hand: Mahjong hand
+    """
+    if not hand.is_closed_hand() or hand.kongs:
         return [], set()
     acceptance = set()
     all_groups = all_groups_for(hand.hand_tiles, 0, 0, 7)

@@ -9,6 +9,12 @@ def can_construct_knitted(
         hand: MahjongHand,
         cache: dict
 ) -> tuple[list[MahjongCombination], set[MahjongTile]]:
+    """Try to construct knitted hand (straight with our without honors)
+
+    Only return result hands when knitted is technically possible
+    (closed hand with honors, or at most one declared group for straight)
+    :param hand: Mahjong hand
+    """
     best_shanten: int = 13
     best_result: list[MahjongCombination] = []
     best_combi: list[MahjongGroup] = []

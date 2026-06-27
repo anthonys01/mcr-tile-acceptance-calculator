@@ -232,6 +232,8 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
     analyze given mahjong hand for each supported hand type
     :param hand: hand to analyze
     :param hand_types: list all hand types to analyze, if specified
+    :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
+    :param seat_wind: seat wind (1-4) or 0 if unknown
     :return: a string containing the analysis
     """
     if len(hand.hand_tiles) < hand.get_natural_size():
@@ -284,11 +286,13 @@ def get_tile_to_discard_from(hand: MahjongHand):
     """
     if not hand.needs_to_discard():
         raise AttributeError(f"Number of tiles not supported : {len(hand.hand_tiles)}")
-    results, acceptance, best_results, nb_away, _ = analyze_hand(hand)
+    results, acceptance, best_results, nb_away, yakus = analyze_hand(hand)
     return (
         _get_best_discard_choice(best_results, results, acceptance, hand),
         nb_away - 1,
         best_results,
+        acceptance,
+        yakus
     )
 
 
@@ -299,6 +303,8 @@ def analyze_hand_from_string_and_print(
     parse hand, analyze it for each supported hand type and print result
     :param hand: hand to parse and analyze
     :param display_all: if False, only show the hand types closest to victory
+    :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
+    :param seat_wind: seat wind (1-4) or 0 if unknown
     :return: a string containing the analysis
     """
     mahjong_hand = parse_hand(hand)

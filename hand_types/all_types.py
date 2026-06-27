@@ -7,6 +7,11 @@ from tiles_utils import FAMILY_TILES, WINDS_TILES, DRAGONS_TILES
 
 
 def can_construct_all_types(hand: MahjongHand):
+    """Try to construct all types
+
+    Only return result hands when all types is technically possible (at most one declared group per type)
+    :param hand: Mahjong hand
+    """
     concatenated_results = []
     have_family = [False] * 5
     declared_groups = hand.get_all_declared_groups()

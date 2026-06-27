@@ -32,7 +32,7 @@ def play_a_game(stop_at_nb_away=0):
         hand.draw(draw_tile)
         #print(f"Draw {draw_tile} : {hand}")
 
-        to_discard, nb_away, hand_types = get_tile_to_discard_from(hand)
+        to_discard, nb_away, hand_types, _, _ = get_tile_to_discard_from(hand)
         # print(f"Discard {to_discard}, {nb_away} away")
         hand.discard(to_discard)
 
