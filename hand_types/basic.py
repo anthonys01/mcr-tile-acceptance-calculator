@@ -191,7 +191,7 @@ def _complete_proto_group(proto_group: MahjongGroup):
             plus_1 = MahjongTile(number=tile.number + 1, family=tile.family)
         if minus_2:
             results.append(([(minus_2, minus_1, tile)], [minus_2, minus_1]))
-        if minus_1:
+        if minus_1 and plus_1:
             results.append(([(minus_1, tile, plus_1)], [minus_1, plus_1]))
         if plus_2:
             results.append(([(tile, plus_1, plus_2)], [plus_1, plus_2]))
@@ -216,5 +216,5 @@ def _complete_pair(proto_group: MahjongGroup):
 
 
 if __name__ == "__main__":
-    print(can_construct_hand(parse_hand("(123)678m667p223s11z")))
+    print(can_construct_hand(parse_hand("256679s259m22378p")))
 

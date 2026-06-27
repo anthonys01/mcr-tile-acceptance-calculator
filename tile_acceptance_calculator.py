@@ -291,7 +291,6 @@ def get_tile_to_discard_from(hand: MahjongHand):
         _get_best_discard_choice(best_results, results, acceptance, hand),
         nb_away - 1,
         best_results,
-        acceptance,
         yakus
     )
 
