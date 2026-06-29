@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MCR Tenpai Trainer</title>
+  <style>
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #0f5132;
+      color: #f5f5f5;
+    }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    #stats {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      background: #114d2c;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 15px;
+    }
+    #stats b { font-size: 18px; }
+    button {
+      font-size: 15px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #ffc107;
+      color: #222;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #message { min-height: 24px; margin: 10px 0; font-size: 16px; }
+    .hand-zone {
+      display: flex;
+      align-items: flex-end;
+      gap: 0;
+      padding: 14px;
+      background: rgba(0,0,0,0.18);
+      border-radius: 10px;
+      min-height: 96px;
+      flex-wrap: wrap;
+    }
+    /* tiles are 128x128 PNGs with 23px transparent padding each side
+       (content x: 23..105). Rendered as cropped backgrounds: for a square
+       display size S, content width = S*82/128 and left offset = S*23/128. */
+    .tile {
+      display: inline-block;
+      vertical-align: bottom;
+      width: 46px;
+      height: 72px;
+      background-repeat: no-repeat;
+      background-size: 72px 72px;
+      background-position: -13px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+    .tile.clickable:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+    }
+    .tile.static { cursor: default; }
+    .drawn-sep { width: 16px; }
+    .drawn-tile { box-shadow: 0 0 0 3px #ffc107; position: relative; z-index: 1; }
+    .win-tiles { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0; }
+    .tile-group { display: inline-flex; margin-right: 16px; }
+    .pile-label { font-size: 13px; color: #cfe9cf; margin: 14px 0 4px; }
+    #discardZone {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 8px;
+      background: rgba(0,0,0,0.12);
+      border-radius: 8px;
+      min-height: 48px;
+    }
+    .disc {
+      display: inline-block;
+      width: 26px;
+      height: 40px;
+      background-repeat: no-repeat;
+      background-size: 40px 40px;
+      background-position: -7px 0;
+      border-radius: 3px;
+    }
+    .feedback {
+      margin: 16px 0;
+      padding: 14px 16px;
+      border-radius: 8px;
+      background: #114d2c;
+      font-size: 15px;
+    }
+    .feedback.error { background: #5c1f24; }
+    .feedback.ok { background: #14502d; }
+    .accrow { margin-top: 6px; font-size: 13px; color: #d7e7d7; }
+    .mini { width: 34px; vertical-align: middle; margin: 0 1px; }
+    #wins .win-card {
+      background: #114d2c;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 14px 0;
+    }
+    #wins .win-card.valid { box-shadow: 0 0 0 2px #ffc107; }
+    #wins .win-card.invalid { opacity: 0.7; }
+    pre { font-size: 13px; line-height: 1.25; margin: 8px 0 0; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+    .badge.valid { background: #ffc107; color: #222; }
+    .badge.invalid { background: #555; color: #eee; }
+    #loading { font-style: italic; color: #cfe9cf; }
+  </style>
+</head>
+<body>
+  <h1>MCR Tenpai Trainer</h1>
+
+  <div id="stats">
+    <div>Turn: <b id="s-turns">0</b></div>
+    <div>Errors: <b id="s-errors">0</b></div>
+    <div>Accuracy: <b id="s-acc">--</b></div>
+    <div>Shanten: <b id="s-shanten">--</b></div>
+  </div>
+
+  <div>
+    <button id="newGameBtn" disabled>Loading engine…</button>
+  </div>
+
+  <div id="message"></div>
+
+  <div id="handZone" class="hand-zone"></div>
+
+  <div class="pile-label">Discards</div>
+  <div id="discardZone"></div>
+
+  <div id="feedback"></div>
+
+  <div id="wins"></div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
+  <script>
+    // ---- count-vector index: m=0-8, p=9-17, s=18-26, z=27-33 ----
+    const FAMILY_OFFSET = { m: 0, p: 9, s: 18, z: 27 };
+    function tileIndex(t) { return FAMILY_OFFSET[t[1]] + (parseInt(t[0], 10) - 1); }
+    function tileImg(t, cls) {
+      return `<img src="tiles-png/${t}.png" class="${cls}" data-tile="${t}" alt="${t}">`;
+    }
+    // cropped background tile (removes the 23px transparent side padding)
+    function tileEl(t, cls) {
+      return `<span class="${cls}" data-tile="${t}" style="background-image:url('tiles-png/${t}.png')"></span>`;
+    }
+    function allTileStrings() {
+      const all = [];
+      ['m', 'p', 's'].forEach(f => { for (let n = 1; n <= 9; n++) all.push(n + f); });
+      for (let n = 1; n <= 7; n++) all.push(n + 'z');
+      return all;
+    }
+    // preload every tile image so newly drawn tiles render with no latency
+    allTileStrings().forEach(t => { const im = new Image(); im.src = 'tiles-png/' + t + '.png'; });
+    function removeOne(arr, val) {
+      const i = arr.indexOf(val);
+      if (i >= 0) arr.splice(i, 1);
+      return arr;
+    }
+    function sortTiles(tiles) {
+      return [...tiles].sort((a, b) => tileIndex(a) - tileIndex(b));
+    }
+
+    // ---- game state ----
+    let pyodide = null;
+    let state = null;
+
+    async function init() {
+      pyodide = await loadPyodide();
+      const pyFiles = ['training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py',
+        'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mcr_scorer.py',
+        'hand_types/__init__.py', 'hand_types/all_pungs.py', 'hand_types/all_types.py', 'hand_types/common.py',
+        'hand_types/basic.py', 'hand_types/knitted.py', 'hand_types/precompute.py', 'hand_types/seven_pairs.py',
+        'hand_types/three_group_pattern.py'];
+      for (const f of pyFiles) {
+        if (f.includes('/')) {
+          try { pyodide.FS.mkdirTree('/home/pyodide/' + f.substring(0, f.lastIndexOf('/'))); } catch (e) {}
+        }
+        const resp = await fetch('./' + f);
+        pyodide.FS.writeFile('/home/pyodide/' + f, await resp.text());
+      }
+      await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')\nimport training_engine");
+      const btn = document.getElementById('newGameBtn');
+      btn.disabled = false;
+      btn.textContent = 'New Game';
+    }
+    init();
+
+    function pyCall(fn, ...args) {
+      pyodide.globals.set('_args', pyodide.toPy(args));
+      return pyodide.runPythonAsync(`training_engine.${fn}(*_args)`);
+    }
+
+    function setMessage(html) { document.getElementById('message').innerHTML = html; }
+    function setLoading(on) {
+      document.getElementById('message').innerHTML = on ? '<span id="loading">Engine is thinking…</span>' : '';
+    }
+
+    function updateStats(shanten) {
+      document.getElementById('s-turns').textContent = state.turns;
+      document.getElementById('s-errors').textContent = state.errors;
+      document.getElementById('s-acc').textContent =
+        state.turns === 0 ? '--' : Math.round((state.turns - state.errors) / state.turns * 100) + '%';
+      if (shanten !== undefined) document.getElementById('s-shanten').textContent = shanten;
+    }
+
+    async function newGame() {
+      document.getElementById('newGameBtn').disabled = true;
+      document.getElementById('feedback').innerHTML = '';
+      document.getElementById('discardZone').innerHTML = '';
+      document.getElementById('wins').innerHTML = '';
+      const poolJson = await pyCall('new_game');
+      const pool = JSON.parse(poolJson);
+      const visible = new Array(34).fill(0);
+      const hand = pool.slice(0, 13);
+      hand.forEach(t => visible[tileIndex(t)]++);
+      state = { pool, pointer: 13, hand, visible, discards: [], turns: 0, errors: 0, drawn: null, turnData: null };
+      updateStats('--');
+      document.getElementById('newGameBtn').disabled = false;
+      await startTurn();
+    }
+
+    function renderDiscards() {
+      document.getElementById('discardZone').innerHTML =
+        state.discards.map(t => tileEl(t, 'disc')).join('');
+    }
+
+    async function startTurn() {
+      // draw a tile
+      const drawn = state.pool[state.pointer++];
+      if (drawn === undefined) {
+        setMessage('Wall is empty — exhaustive draw. Start a new game.');
+        return;
+      }
+      state.hand.push(drawn);
+      state.visible[tileIndex(drawn)]++;
+      state.drawn = drawn;
+      renderHand(false);
+      setLoading(true);
+      const res = JSON.parse(await pyCall('analyze_turn',
+        JSON.stringify(state.hand), JSON.stringify(state.visible)));
+      state.turnData = res;
+      updateStats(res.engine.away);
+      setLoading(false);
+      setMessage('Your turn — click a tile to <b>discard</b>.');
+      renderHand(true);
+    }
+
+    function renderHand(clickable) {
+      const rest = sortTiles(removeOne([...state.hand], state.drawn));
+      const cls = clickable ? 'tile clickable' : 'tile static';
+      let html = rest.map(t => tileEl(t, cls)).join('');
+      if (state.drawn) {
+        html += '<span class="drawn-sep"></span>';
+        html += tileEl(state.drawn, cls + ' drawn-tile');
+      }
+      const zone = document.getElementById('handZone');
+      zone.innerHTML = html;
+      if (clickable) {
+        zone.querySelectorAll('.clickable').forEach(el => {
+          el.addEventListener('click', () => onDiscard(el.dataset.tile));
+        });
+      }
+    }
+
+    async function onDiscard(tile) {
+      const data = state.turnData;
+      const engTile = data.engine_discard;
+      const engData = data.engine;
+
+      // freeze the board and score the user's discard on demand
+      renderHand(false);
+      setLoading(true);
+      const handBeforeDiscard = JSON.stringify(state.hand);
+      const userData = (tile === engTile)
+        ? engData
+        : JSON.parse(await pyCall('evaluate_discard',
+            handBeforeDiscard, tile, JSON.stringify(state.visible)));
+      setLoading(false);
+
+      state.turns++;
+      const diff = engData.number - userData.number;
+      const isError = userData.number < engData.number;
+      if (isError) state.errors++;
+
+      // perform the discard (visible vector keeps the tile as "seen")
+      removeOne(state.hand, tile);
+      state.drawn = null;
+      state.discards.push(tile);
+      renderHand(false);
+      renderDiscards();
+      updateStats(userData.away);
+
+      // feedback
+      const fb = document.getElementById('feedback');
+      const accImgs = (acc) => acc.map(t => tileImg(t, 'mini static')).join('') || '∅';
+      let html =
+        `<div><b>${isError ? '✗ Suboptimal' : '✓ Good choice'}</b> — `
+        + `you discarded ${tileImg(tile, 'mini static')} `
+        + `(acceptance ${userData.number} tiles).</div>`
+        + `<div>Best discard: ${tileImg(engTile, 'mini static')} `
+        + `(acceptance ${engData.number} tiles). `
+        + `Difference: <b>${diff > 0 ? '-' + diff : diff} tiles</b>.</div>`
+        + `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
+        + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
+      if (isError) {
+        const lost = engData.best_results.filter(t => !userData.best_results.includes(t));
+        html += `<div class="accrow">Best hand types: <b>${engData.best_results.join(', ') || '—'}</b></div>`
+          + `<div class="accrow">Lost vs your discard: <b>${lost.join(', ') || 'none'}</b></div>`;
+      }
+      fb.className = 'feedback ' + (isError ? 'error' : 'ok');
+      fb.innerHTML = html;
+
+      // end-of-game detection: tenpai (0-shanten) to a valid (>=8 pts) hand
+      if (userData.away === 0) {
+        setLoading(true);
+        const wins = JSON.parse(await pyCall('score_winning_tiles',
+          JSON.stringify(sortTiles(state.hand)), JSON.stringify(userData.acceptance)));
+        setLoading(false);
+        const hasValid = wins.some(w => w.points >= 8);
+        if (hasValid) { showWins(wins); return; }
+      }
+      // immediately start the next turn; the feedback above stays visible
+      await startTurn();
+    }
+
+    function showWins(wins) {
+      setMessage(`<b>Tenpai!</b> Final accuracy: `
+        + `${Math.round((state.turns - state.errors) / state.turns * 100)}% `
+        + `(${state.turns - state.errors}/${state.turns}). Winning possibilities:`);
+      const container = document.getElementById('wins');
+      container.innerHTML = wins.map(w => {
+        const valid = w.points >= 8;
+        let highlighted = false;
+        const groups = w.won_groups.map(g => {
+          const inner = g.map(t => {
+            const isWin = !highlighted && t === w.tile;
+            if (isWin) highlighted = true;
+            return tileEl(t, 'tile static' + (isWin ? ' drawn-tile' : ''));
+          }).join('');
+          return `<span class="tile-group">${inner}</span>`;
+        }).join('');
+        const badge = valid
+          ? '<span class="badge valid">VALID</span>'
+          : '<span class="badge invalid">&lt; 8 pts</span>';
+        return `<div class="win-card ${valid ? 'valid' : 'invalid'}">`
+          + `<div>Win on ${tileImg(w.tile, 'mini static')} — <b>${w.points} points</b>${badge}</div>`
+          + `<div class="win-tiles" style="margin-top:8px">${groups}</div>`
+          + `<pre>${w.table}</pre></div>`;
+      }).join('');
+    }
+
+    document.getElementById('newGameBtn').addEventListener('click', newGame);
+    window.trainer = { state: () => state };
+  </script>
+  <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
+    Website by Anthonys01 &mdash; Tiles from <a href="https://martinpersson.org/" style="color:#888;">Martin Persson</a>
+  </footer>
+</body>
+</html>
