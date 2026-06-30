@@ -1214,8 +1214,8 @@ class MahjongMCRYaku(Enum):
     MELDED_KONG              = (74, 1,  [],                   _check_melded_kong)
     ONE_VOIDED_SUIT          = (75, 1,  [],                   _check_one_voided_suit)
     NO_HONOR                 = (76, 1,  [],                   _check_no_honor)
-    EDGE_WAIT                = (77, 1,  [],                   _check_edge_wait)
-    CLOSED_WAIT              = (78, 1,  [],                   _check_closed_wait)
+    EDGE_WAIT                = (77, 1,  [78, 79],             _check_edge_wait)
+    CLOSED_WAIT              = (78, 1,  [79],                 _check_closed_wait)
     SINGLE_WAIT              = (79, 1,  [],                   _check_single_wait)
     SELF_DRAWN               = (80, 1,  [],                   _check_self_drawn)
     # 81 flowers
