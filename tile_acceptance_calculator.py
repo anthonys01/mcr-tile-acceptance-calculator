@@ -200,7 +200,7 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles, candidates_occ
 
 
 def _print_best_discard_choice(best_results, results, acceptance, hand):
-    best_discard_tile, acceptance_after_discard, acceptance_nb = (
+    best_discard_tile, acceptance_after_discard, acceptance_nb, _by_type = (
         _get_best_discard_choice(best_results, results, acceptance, hand)
     )
     return f"Tile to discard next: {best_discard_tile} (acceptance: {sorted(acceptance_after_discard)} -> {acceptance_nb} tiles)\n"
@@ -209,6 +209,9 @@ def _print_best_discard_choice(best_results, results, acceptance, hand):
 def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHand):
     # tile -> set union des acceptances de tous les types où elle est dans le résidu
     candidate_acceptance: dict[MahjongTile, set] = defaultdict(set)
+    candidate_acceptance_by_type: dict[MahjongTile, dict] = defaultdict(
+        lambda: defaultdict(set)
+    )
     candidate_type_occurrence: dict[MahjongTile, set] = defaultdict(set)
 
     for best_result in best_results:
@@ -220,14 +223,24 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
                     seven_pair_acceptance = set(acceptance_pool)
                     seven_pair_acceptance.remove(tile)
                     candidate_acceptance[tile].update(seven_pair_acceptance)
+                    candidate_acceptance_by_type[tile][best_result].update(
+                        seven_pair_acceptance
+                    )
                 elif best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
                     # with honors
                     candidate_acceptance[tile].update(acceptance_pool)
+                    candidate_acceptance_by_type[tile][best_result].update(
+                        acceptance_pool
+                    )
                 else:
                     hand_full_acceptance = get_tile_acceptance_of_groups(combi)
-                    candidate_acceptance[tile].update(
-                        hand_full_acceptance.intersection(acceptance_pool)
-                    )  # union
+                    useful_acceptance = hand_full_acceptance.intersection(
+                        acceptance_pool
+                    )
+                    candidate_acceptance[tile].update(useful_acceptance)  # union
+                    candidate_acceptance_by_type[tile][best_result].update(
+                        useful_acceptance
+                    )
 
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
@@ -242,7 +255,12 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
         if _get_acceptance_tile_number(hand, acc) == best_score
     ]
     to_discard = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
-    return to_discard, candidate_acceptance[to_discard], best_score
+    return (
+        to_discard,
+        candidate_acceptance[to_discard],
+        best_score,
+        dict(candidate_acceptance_by_type[to_discard]),
+    )
 
 
 def get_simple_acceptance(results, best_results, acceptance):
@@ -259,6 +277,25 @@ def get_simple_acceptance(results, best_results, acceptance):
                     hand_full_acceptance.intersection(acceptance_pool)
                 )
     return simple_acceptance
+
+
+def get_acceptance_by_hand_type(results, best_results, acceptance):
+    """Acceptance tiles split per hand type, so a caller can show which tiles
+    are useful for which of the best hand types."""
+    acceptance_by_type: dict[str, set] = {}
+    for best_result in best_results:
+        acceptance_pool = acceptance[best_result]
+        type_acceptance: set = set()
+        for combi, residue in results[best_result]:
+            if best_result == HandType.SEVEN_PAIRS.value or (best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4):
+                type_acceptance.update(acceptance_pool)
+            else:
+                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
+                type_acceptance.update(
+                    hand_full_acceptance.intersection(acceptance_pool)
+                )
+        acceptance_by_type[best_result] = type_acceptance
+    return acceptance_by_type
 
 
 def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind=0):
@@ -312,20 +349,27 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
     return results, acceptance, best_results, closest_away, basic_yakus
 
 
-def get_tile_to_discard_from(hand: MahjongHand):
+def get_tile_to_discard_from(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
     """
     get the next tile to discard, and current number of tiles away after discard
     :param hand: hand to analyze
-    :return: the tile to discard
+    :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
+    :param seat_wind: seat wind (1-4) or 0 if unknown
+    :return: ((discard, acceptance, acceptance_nb, acceptance_by_type), away,
+             best_results, yakus, results, acceptance)
     """
     if not hand.needs_to_discard():
         raise AttributeError(f"Number of tiles not supported : {len(hand.hand_tiles)}")
-    results, acceptance, best_results, nb_away, yakus = analyze_hand(hand)
+    results, acceptance, best_results, nb_away, yakus = analyze_hand(
+        hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
+    )
     return (
         _get_best_discard_choice(best_results, results, acceptance, hand),
         nb_away - 1,
         best_results,
-        yakus
+        yakus,
+        results,
+        acceptance,
     )
 
 

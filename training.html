@@ -118,7 +118,56 @@
     }
     .badge.valid { background: #ffc107; color: #222; }
     .badge.invalid { background: #555; color: #eee; }
-    #loading { font-style: italic; color: #cfe9cf; }
+    #loading {
+      font-style: italic;
+      color: #cfe9cf;
+    }
+    #loading::after {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-left: 8px;
+      vertical-align: -1px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #ffc107;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #seedInput {
+      font-size: 14px;
+      padding: 7px 10px;
+      border: none;
+      border-radius: 6px;
+      width: 160px;
+    }
+    #seedDisplay { font-size: 14px; color: #cfe9cf; }
+    .link-btn {
+      background: transparent;
+      color: #ffc107;
+      font-weight: 600;
+      padding: 0 4px;
+      font-size: 13px;
+    }
+    .type-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+    .type-name { min-width: 130px; font-weight: 700; color: #ffe08a; }
+    .type-cols { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 4px; }
+    .type-col { flex: 1; min-width: 240px; }
+    .type-col h4 { margin: 6px 0 2px; font-size: 13px; color: #d7e7d7; }
   </style>
 </head>
 <body>
@@ -129,10 +178,16 @@
     <div>Errors: <b id="s-errors">0</b></div>
     <div>Accuracy: <b id="s-acc">--</b></div>
     <div>Away: <b id="s-shanten">--</b></div>
+    <div>Round wind: <b id="s-prevalent">--</b></div>
+    <div>Seat wind: <b id="s-seat">--</b></div>
   </div>
 
-  <div>
+  <div id="controls">
     <button id="newGameBtn" disabled>Loading engine…</button>
+    <input id="seedInput" type="text" inputmode="numeric" placeholder="Seed (optional)">
+    <span id="seedDisplay" hidden>Seed: <b id="seedValue"></b>
+      <button id="copySeedBtn" type="button" class="link-btn">Copy</button>
+    </span>
   </div>
 
   <div id="message"></div>
@@ -146,10 +201,10 @@
 
   <div id="wins"></div>
 
-  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
     // ---- count-vector index: m=0-8, p=9-17, s=18-26, z=27-33 ----
     const FAMILY_OFFSET = { m: 0, p: 9, s: 18, z: 27 };
+    const WIND_NAMES = { 1: 'East', 2: 'South', 3: 'West', 4: 'North' };
     function tileIndex(t) { return FAMILY_OFFSET[t[1]] + (parseInt(t[0], 10) - 1); }
     function tileImg(t, cls) {
       return `<img src="tiles-png/${t}.png" class="${cls}" data-tile="${t}" alt="${t}">`;
@@ -176,33 +231,41 @@
     }
 
     // ---- game state ----
-    let pyodide = null;
+    let worker = null;
     let state = null;
+    let reqId = 0;
+    const pending = {};
 
-    async function init() {
-      pyodide = await loadPyodide();
-      const pyFiles = ['training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py',
-        'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mcr_scorer.py',
-        'hand_types/__init__.py', 'hand_types/all_pungs.py', 'hand_types/all_types.py', 'hand_types/common.py',
-        'hand_types/basic.py', 'hand_types/knitted.py', 'hand_types/precompute.py', 'hand_types/seven_pairs.py',
-        'hand_types/three_group_pattern.py'];
-      for (const f of pyFiles) {
-        if (f.includes('/')) {
-          try { pyodide.FS.mkdirTree('/home/pyodide/' + f.substring(0, f.lastIndexOf('/'))); } catch (e) {}
+    function initEngine() {
+      worker = new Worker('training_worker.js', { type: 'module' });
+      worker.onmessage = (event) => {
+        const msg = event.data;
+        if (msg.type === 'ready') {
+          const btn = document.getElementById('newGameBtn');
+          btn.disabled = false;
+          btn.textContent = 'New Game';
+          return;
         }
-        const resp = await fetch('./' + f);
-        pyodide.FS.writeFile('/home/pyodide/' + f, await resp.text());
-      }
-      await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')\nimport training_engine");
-      const btn = document.getElementById('newGameBtn');
-      btn.disabled = false;
-      btn.textContent = 'New Game';
+        if (msg.type === 'fatal') {
+          setMessage('Engine failed to load: ' + msg.error);
+          return;
+        }
+        const cb = pending[msg.id];
+        if (!cb) return;
+        delete pending[msg.id];
+        if (msg.type === 'error') cb.reject(new Error(msg.error));
+        else cb.resolve(msg.result);
+      };
+      worker.onerror = (e) => setMessage('Engine error: ' + e.message);
     }
-    init();
+    initEngine();
 
     function pyCall(fn, ...args) {
-      pyodide.globals.set('_args', pyodide.toPy(args));
-      return pyodide.runPythonAsync(`training_engine.${fn}(*_args)`);
+      return new Promise((resolve, reject) => {
+        const id = ++reqId;
+        pending[id] = { resolve, reject };
+        worker.postMessage({ id, fn, args });
+      });
     }
 
     function setMessage(html) { document.getElementById('message').innerHTML = html; }
@@ -216,6 +279,15 @@
       document.getElementById('s-acc').textContent =
         state.turns === 0 ? '--' : Math.round((state.turns - state.errors) / state.turns * 100) + '%';
       if (shanten !== undefined) document.getElementById('s-shanten').textContent = shanten;
+      document.getElementById('s-prevalent').textContent =
+        state ? WIND_NAMES[state.prevalentWind] : '--';
+      document.getElementById('s-seat').textContent =
+        state ? WIND_NAMES[state.seatWind] : '--';
+    }
+
+    function showSeed(seed) {
+      document.getElementById('seedValue').textContent = seed;
+      document.getElementById('seedDisplay').hidden = false;
     }
 
     async function newGame() {
@@ -223,12 +295,19 @@
       document.getElementById('feedback').innerHTML = '';
       document.getElementById('discardZone').innerHTML = '';
       document.getElementById('wins').innerHTML = '';
-      const poolJson = await pyCall('new_game');
-      const pool = JSON.parse(poolJson);
+      const seedRaw = document.getElementById('seedInput').value.trim();
+      const seedArgs = /^\d+$/.test(seedRaw) ? [seedRaw] : [];
+      const game = JSON.parse(await pyCall('new_game', ...seedArgs));
+      const pool = game.pool;
       const visible = new Array(34).fill(0);
       const hand = pool.slice(0, 13);
       hand.forEach(t => visible[tileIndex(t)]++);
-      state = { pool, pointer: 13, hand, visible, discards: [], turns: 0, errors: 0, drawn: null, turnData: null };
+      state = {
+        pool, pointer: 13, hand, visible, discards: [], turns: 0, errors: 0,
+        drawn: null, turnData: null, seed: game.seed,
+        prevalentWind: game.prevalent_wind, seatWind: game.seat_wind,
+      };
+      showSeed(game.seed);
       updateStats('--');
       document.getElementById('newGameBtn').disabled = false;
       await startTurn();
@@ -252,7 +331,8 @@
       renderHand(false);
       setLoading(true);
       const res = JSON.parse(await pyCall('analyze_turn',
-        JSON.stringify(state.hand), JSON.stringify(state.visible)));
+        JSON.stringify(state.hand), JSON.stringify(state.visible),
+        state.prevalentWind, state.seatWind));
       state.turnData = res;
       updateStats(res.engine.away);
       setLoading(false);
@@ -289,7 +369,8 @@
       const userData = (tile === engTile)
         ? engData
         : JSON.parse(await pyCall('evaluate_discard',
-            handBeforeDiscard, tile, JSON.stringify(state.visible)));
+            handBeforeDiscard, tile, JSON.stringify(state.visible),
+            state.prevalentWind, state.seatWind));
       setLoading(false);
 
       state.turns++;
@@ -320,8 +401,10 @@
       html += `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
           + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
       if (isError) {
-        html += `<div class="accrow">Your best hand types: <b>${userData.best_results.join(', ') || '—'}</b></div>`
-          + `<div class="accrow">Engine's best hand types: <b>${engData.best_results.join(', ') || '—'}</b></div>`;
+        html += `<div class="type-cols">`
+          + `<div class="type-col"><h4>Your best hand types</h4>${typeBreakdown(userData.best_results_acceptance)}</div>`
+          + `<div class="type-col"><h4>Engine's best hand types</h4>${typeBreakdown(engData.best_results_acceptance)}</div>`
+          + `</div>`;
       }
       fb.className = 'feedback ' + (isError ? 'error' : 'ok');
       fb.innerHTML = html;
@@ -330,13 +413,23 @@
       if (userData.away === 0) {
         setLoading(true);
         const wins = JSON.parse(await pyCall('score_winning_tiles',
-          JSON.stringify(sortTiles(state.hand)), JSON.stringify(userData.acceptance)));
+          JSON.stringify(sortTiles(state.hand)), JSON.stringify(userData.acceptance),
+          false, false, state.prevalentWind, state.seatWind));
         setLoading(false);
         const hasValid = wins.some(w => w.points >= 8);
         if (hasValid) { showWins(wins); return; }
       }
       // immediately start the next turn; the feedback above stays visible
       await startTurn();
+    }
+
+    function typeBreakdown(rows) {
+      if (!rows || !rows.length) return '<div class="type-row">—</div>';
+      return rows.map(r => {
+        const imgs = r.acceptance.map(t => tileImg(t, 'mini static')).join('') || '∅';
+        return `<div class="type-row"><span class="type-name">${r.type}</span>`
+          + `${imgs} <span style="color:#cfe9cf">(${r.number} tiles)</span></div>`;
+      }).join('');
     }
 
     function showWins(wins) {
@@ -366,6 +459,17 @@
     }
 
     document.getElementById('newGameBtn').addEventListener('click', newGame);
+    document.getElementById('copySeedBtn').addEventListener('click', () => {
+      const seed = document.getElementById('seedValue').textContent;
+      const btn = document.getElementById('copySeedBtn');
+      const done = () => { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(seed).then(done).catch(() => {});
+      } else {
+        const inp = document.getElementById('seedInput');
+        inp.value = seed; inp.select(); document.execCommand('copy'); done();
+      }
+    });
     window.trainer = { state: () => state };
   </script>
   <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
