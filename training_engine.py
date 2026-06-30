@@ -78,14 +78,16 @@ def _evaluate_discard(tile_strs, discard, visible, prevalent_wind=0, seat_wind=0
     remaining = list(tile_strs)
     remaining.remove(discard)
     hand13 = _hand_from_tiles(remaining)
-    results, acceptance, best_results, away, _basic = analyze_hand(
+    results, acceptance, best_results, away, basic_yakus = analyze_hand(
         hand13, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
     acc_tiles = sorted(
         get_simple_acceptance(results, best_results, acceptance),
         key=lambda tile: tile.index,
     )
-    acceptance_by_type = get_acceptance_by_hand_type(results, best_results, acceptance)
+    acceptance_by_type = get_acceptance_by_hand_type(
+        results, best_results, acceptance, basic_yakus
+    )
     return {
         "acceptance": [str(tile) for tile in acc_tiles],
         "number": _acceptance_number(acc_tiles, visible),

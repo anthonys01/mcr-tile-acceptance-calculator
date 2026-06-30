@@ -24,6 +24,7 @@ from mahjong_objects import (
     Family,
     MahjongHand,
     MahjongCombination,
+    MahjongMCRYaku,
     get_tiles_from_family,
 )
 from mcr_scorer import print_yakus
@@ -206,7 +207,66 @@ def _print_best_discard_choice(best_results, results, acceptance, hand):
     return f"Tile to discard next: {best_discard_tile} (acceptance: {sorted(acceptance_after_discard)} -> {acceptance_nb} tiles)\n"
 
 
-def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHand):
+_BASIC_MAIN_YAKU_MIN_POINTS = 4
+
+# Yakus that are already surfaced by a dedicated HandType. When a Basic
+# combination's main yaku maps to one of these and that hand type is among the
+# closest results, the combination is dropped from the Basic breakdown to avoid
+# showing the same information twice.
+_YAKU_TO_HAND_TYPE = {
+    MahjongMCRYaku.MIXED_STRAIGHT: HandType.MIXED_STRAIGHT,
+    MahjongMCRYaku.MIXED_SHIFTED_CHOWS: HandType.MIXED_SHIFTED,
+    MahjongMCRYaku.PURE_STRAIGHT: HandType.PURE_STRAIGHT,
+    MahjongMCRYaku.PURE_SHIFTED_CHOWS: HandType.PURE_SHIFTED,
+    MahjongMCRYaku.MIXED_TRIPLE_CHOW: HandType.TRIPLE_CHOWS,
+    MahjongMCRYaku.PURE_TRIPLE_CHOW: HandType.TRIPLE_CHOWS,
+    MahjongMCRYaku.ALL_PUNGS: HandType.ALL_PUNGS,
+    MahjongMCRYaku.SEVEN_PAIRS: HandType.SEVEN_PAIRS,
+    MahjongMCRYaku.HALF_FLUSH: HandType.HALF_FLUSH,
+    MahjongMCRYaku.FULL_FLUSH: HandType.HALF_FLUSH,
+    MahjongMCRYaku.ALL_TYPES: HandType.ALL_TYPES,
+    MahjongMCRYaku.KNITTED_STRAIGHT: HandType.KNITTED,
+    MahjongMCRYaku.LESSER_HONORS_AND_KNITTED_TILES: HandType.KNITTED,
+    MahjongMCRYaku.GREATER_HONORS_AND_KNITTED_TILES: HandType.KNITTED,
+    MahjongMCRYaku.UPPER_TILES: HandType.FIRST_OR_LAST_N_TILES,
+    MahjongMCRYaku.MIDDLE_TILES: HandType.FIRST_OR_LAST_N_TILES,
+    MahjongMCRYaku.LOWER_TILES: HandType.FIRST_OR_LAST_N_TILES,
+    MahjongMCRYaku.UPPER_FOUR: HandType.FIRST_OR_LAST_N_TILES,
+    MahjongMCRYaku.LOWER_FOUR: HandType.FIRST_OR_LAST_N_TILES,
+    MahjongMCRYaku.REVERSIBLE_TILES: HandType.SYMMETRY,
+}
+
+
+def _yaku_display_name(yaku: MahjongMCRYaku) -> str:
+    return yaku.name.replace("_", " ").title()
+
+
+def _basic_combo_label(yakus, best_results):
+    """Display label for a single Basic combination, or None to drop it.
+
+    The label is the combination's "main" yaku: the highest scoring yaku, which
+    must be worth at least ``_BASIC_MAIN_YAKU_MIN_POINTS``. Combinations whose
+    main yaku is already represented by a dedicated hand type present in
+    ``best_results`` are dropped to avoid redundancy. Combinations without a
+    valuable enough main yaku keep the generic "Basic" label.
+    """
+    if not yakus:
+        return HandType.BASIC.value
+    main_yaku, _count = max(
+        yakus,
+        key=lambda yaku_count: (yaku_count[0].get_points(), -yaku_count[0].get_id()),
+    )
+    if main_yaku.get_points() < _BASIC_MAIN_YAKU_MIN_POINTS:
+        return HandType.BASIC.value
+    overlapping_type = _YAKU_TO_HAND_TYPE.get(main_yaku)
+    if overlapping_type is not None and overlapping_type.value in best_results:
+        return None
+    return _yaku_display_name(main_yaku)
+
+
+def _get_best_discard_choice(
+    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+):
     # tile -> set union des acceptances de tous les types où elle est dans le résidu
     candidate_acceptance: dict[MahjongTile, set] = defaultdict(set)
     candidate_acceptance_by_type: dict[MahjongTile, dict] = defaultdict(
@@ -216,31 +276,31 @@ def _get_best_discard_choice(best_results, results, acceptance, hand: MahjongHan
 
     for best_result in best_results:
         acceptance_pool = acceptance[best_result]
-        for combi, residue in results[best_result]:
+        for combo_index, (combi, residue) in enumerate(results[best_result]):
+            # Basic combinations are labelled by their main yaku (or dropped from
+            # the breakdown when redundant); the discard selection below is left
+            # untouched so the chosen tile is unaffected.
+            if best_result == HandType.BASIC.value:
+                combo_yakus = basic_yakus[combo_index][1] if basic_yakus else []
+                label = _basic_combo_label(combo_yakus, best_results)
+            else:
+                label = best_result
             for tile in set(residue):
                 candidate_type_occurrence[tile].add(best_result)
                 if best_result == HandType.SEVEN_PAIRS.value:
-                    seven_pair_acceptance = set(acceptance_pool)
-                    seven_pair_acceptance.remove(tile)
-                    candidate_acceptance[tile].update(seven_pair_acceptance)
-                    candidate_acceptance_by_type[tile][best_result].update(
-                        seven_pair_acceptance
-                    )
+                    useful_acceptance = set(acceptance_pool)
+                    useful_acceptance.remove(tile)
                 elif best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
                     # with honors
-                    candidate_acceptance[tile].update(acceptance_pool)
-                    candidate_acceptance_by_type[tile][best_result].update(
-                        acceptance_pool
-                    )
+                    useful_acceptance = set(acceptance_pool)
                 else:
                     hand_full_acceptance = get_tile_acceptance_of_groups(combi)
                     useful_acceptance = hand_full_acceptance.intersection(
                         acceptance_pool
                     )
-                    candidate_acceptance[tile].update(useful_acceptance)  # union
-                    candidate_acceptance_by_type[tile][best_result].update(
-                        useful_acceptance
-                    )
+                candidate_acceptance[tile].update(useful_acceptance)  # union
+                if label is not None:
+                    candidate_acceptance_by_type[tile][label].update(useful_acceptance)
 
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
@@ -279,23 +339,34 @@ def get_simple_acceptance(results, best_results, acceptance):
     return simple_acceptance
 
 
-def get_acceptance_by_hand_type(results, best_results, acceptance):
+def get_acceptance_by_hand_type(results, best_results, acceptance, basic_yakus=None):
     """Acceptance tiles split per hand type, so a caller can show which tiles
-    are useful for which of the best hand types."""
-    acceptance_by_type: dict[str, set] = {}
+    are useful for which of the best hand types.
+
+    The generic "Basic" hand type is expanded into one entry per combination,
+    labelled by its main yaku (e.g. Chicken Hand, Outside Hand, Three Concealed
+    Pungs). Combinations that merely duplicate another displayed hand type are
+    dropped (see ``_basic_combo_label``).
+    """
+    acceptance_by_type: dict[str, set] = defaultdict(set)
     for best_result in best_results:
         acceptance_pool = acceptance[best_result]
-        type_acceptance: set = set()
-        for combi, residue in results[best_result]:
+        for combo_index, (combi, residue) in enumerate(results[best_result]):
+            if best_result == HandType.BASIC.value:
+                combo_yakus = basic_yakus[combo_index][1] if basic_yakus else []
+                label = _basic_combo_label(combo_yakus, best_results)
+                if label is None:
+                    continue
+            else:
+                label = best_result
             if best_result == HandType.SEVEN_PAIRS.value or (best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4):
-                type_acceptance.update(acceptance_pool)
+                acceptance_by_type[label].update(acceptance_pool)
             else:
                 hand_full_acceptance = get_tile_acceptance_of_groups(combi)
-                type_acceptance.update(
+                acceptance_by_type[label].update(
                     hand_full_acceptance.intersection(acceptance_pool)
                 )
-        acceptance_by_type[best_result] = type_acceptance
-    return acceptance_by_type
+    return dict(acceptance_by_type)
 
 
 def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind=0):
@@ -364,7 +435,7 @@ def get_tile_to_discard_from(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
         hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
     return (
-        _get_best_discard_choice(best_results, results, acceptance, hand),
+        _get_best_discard_choice(best_results, results, acceptance, hand, yakus),
         nb_away - 1,
         best_results,
         yakus,
