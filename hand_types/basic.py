@@ -155,13 +155,13 @@ def _complete_proto_group(proto_group: MahjongGroup):
                 # edge wait
                 edge_tile = MahjongTile(number=7, family=smallest_tile.family)
                 results.append(
-                    ([(smallest_tile, edge_tile, biggest_tile)], [edge_tile])
+                    ([(edge_tile, smallest_tile, biggest_tile)], [edge_tile])
                 )
             elif smallest_tile.number == 1 and biggest_tile.number == 2:
                 # edge wait
                 edge_tile = MahjongTile(number=3, family=smallest_tile.family)
                 results.append(
-                    ([(smallest_tile, edge_tile, biggest_tile)], [edge_tile])
+                    ([(smallest_tile, biggest_tile, edge_tile)], [edge_tile])
                 )
             else:
                 # double wait
