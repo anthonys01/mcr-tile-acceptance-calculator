@@ -423,11 +423,16 @@ class HandContext:
     free_pungs_single: list = field(
         init=False
     )  # single-group pool (for Dragon Pung, Winds, POTH)
+    # Cached optimal plan for the low-tier chow-combination yakus
+    # (pure/mixed double chow, short straight, two terminal chows). Computed
+    # lazily the first time one of those checks runs.
+    chow_combo_plan: dict | None = field(init=False)
 
     def __post_init__(self):
         self.free_chows = list(self.chows)
         self.free_pungs = list(self.pungs + self.kongs)
         self.free_pungs_single = list(self.pungs + self.kongs)
+        self.chow_combo_plan = None
 
 
 # ---------------------------------------------------------------------------
@@ -1007,65 +1012,129 @@ def _check_all_simple(h: HandContext) -> bool:
     return all(t.is_ordinary() for t in h.all_tiles)
 
 
-def _check_pure_double_chow(h: HandContext) -> bool:
-    c = Counter(h.chows)
-    for chow, count in c.items():
-        if count >= 2:
-            family, start = chow[0].family, chow[0].number
-            if _has_free_chow(h, family, start):
-                _take_free_chow(h, family, start)
-                _take_free_chow(h, family, start)
-                return True
-    return False
+# ---------------------------------------------------------------------------
+# Low-tier chow-combination yakus (pure/mixed double chow, short straight,
+# two terminal chows). These four share the leftover ``free_chows`` pool and
+# can legally share melds with one another, so a fixed-priority greedy
+# consumption order can miss feasible assignments (it may consume every free
+# chow on the higher-priority combos and leave none for a lower-priority one
+# that could otherwise still be scored). We instead compute, once per context,
+# the optimal joint assignment via a small backtracking search and have each
+# check draw its committed count from that plan.
+# ---------------------------------------------------------------------------
+
+# All four low-tier chow combinations are worth 1 point each.
+_LOW_CHOW_POINTS = {69: 1, 70: 1, 71: 1, 72: 1}
 
 
-def _check_mixed_double_chow(h: HandContext) -> bool:
-    """2 chows of the same starting number in different suits. Consumes those 2 chows."""
-    by_num: dict[int, list] = {}
+def _low_chow_combo_instances(h: HandContext) -> list[tuple[int, list]]:
+    """Enumerate every candidate low-tier chow combination as
+    ``(yaku_id, [token, token])`` where each token is a ``(family, start)`` chow
+    slot the combination would consume.  Patterns are detected over *all* chows
+    (``h.chows``); fireability against the free pool is handled by the solver."""
+    starts_by_fam: dict = {}
     for g in h.chows:
-        by_num.setdefault(g[0].number, []).append(g)
-    for _, groups in by_num.items():
-        fams = {g[0].family for g in groups}
-        if len(fams) >= 2:
-            consumed = []
-            used_fams: set = set()
-            for g in groups:
-                if g[0].family not in used_fams:
-                    consumed.append(g)
-                    used_fams.add(g[0].family)
-                    if len(consumed) == 2:
-                        break
-            if any(_has_free_chow(h, g[0].family, g[0].number) for g in consumed):
-                for g in consumed:
-                    _take_free_chow(h, g[0].family, g[0].number)
-                return True
-    return False
+        starts_by_fam.setdefault(g[0].family, Counter())[g[0].number] += 1
+
+    instances: list = []
+    # Pure double chow: two identical chows in the same suit.
+    for fam, counts in starts_by_fam.items():
+        for start, count in counts.items():
+            if count >= 2:
+                instances.append((MahjongMCRYaku.PURE_DOUBLE_CHOW.get_id(), [(fam, start), (fam, start)]))
+    # Mixed double chow: same start in two different suits.
+    fams_by_start: dict = {}
+    for fam, counts in starts_by_fam.items():
+        for start in counts:
+            fams_by_start.setdefault(start, []).append(fam)
+    for start, fams in fams_by_start.items():
+        ufams = list(dict.fromkeys(fams))
+        for i in range(len(ufams)):
+            for j in range(i + 1, len(ufams)):
+                instances.append((MahjongMCRYaku.MIXED_DOUBLE_CHOW.get_id(), [(ufams[i], start), (ufams[j], start)]))
+    # Short straight: two chows in one suit shifted by 3 (e.g. 123 + 456).
+    for fam, counts in starts_by_fam.items():
+        for start in counts:
+            if (start + 3) in counts:
+                instances.append((MahjongMCRYaku.SHORT_STRAIGHT.get_id(), [(fam, start), (fam, start + 3)]))
+    # Two terminal chows: 123 + 789 in the same suit.
+    for fam, counts in starts_by_fam.items():
+        if 1 in counts and 7 in counts:
+            instances.append((MahjongMCRYaku.TWO_TERMINAL_CHOWS.get_id(), [(fam, 1), (fam, 7)]))
+    return instances
 
 
-def _check_short_straight(h: HandContext) -> bool:
-    """2 consecutive chows in the same suit (e.g. 123+456 or 456+789). Consumes those 2 chows."""
-    for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
-        starts = sorted(_chow_starts_for_family(h, family))
-        for i in range(len(starts) - 1):
-            s1, s2 = starts[i], starts[i + 1]
-            if s2 - s1 == 3:
-                if _has_free_chow(h, family, s1) or _has_free_chow(h, family, s2):
-                    _take_free_chow(h, family, s1)
-                    _take_free_chow(h, family, s2)
-                    return True
-    return False
+def _plan_is_better(a: tuple, b: tuple) -> bool:
+    """True if plan ``a`` (tuple of yaku ids) beats plan ``b``: higher total
+    points first, then – at equal points – the combination of higher-priority
+    (lower-id) yakus, matching the engine's high-value-first principle."""
+    pa = sum(_LOW_CHOW_POINTS[i] for i in a)
+    pb = sum(_LOW_CHOW_POINTS[i] for i in b)
+    if pa != pb:
+        return pa > pb
+    return tuple(sorted(a)) < tuple(sorted(b))
 
 
-def _check_two_terminal_chows(h: HandContext) -> bool:
-    """123 + 789 in the same suit. Consumes those 2 chows."""
-    for family in (Family.BAMBOO, Family.CIRCLE, Family.CHARACTER):
-        starts = _chow_starts_for_family(h, family)
-        if 1 in starts and 7 in starts:
-            if _has_free_chow(h, family, 1) or _has_free_chow(h, family, 7):
-                _take_free_chow(h, family, 1)
-                _take_free_chow(h, family, 7)
-                return True
-    return False
+def _compute_low_chow_combo_plan(h: HandContext) -> Counter[int]:
+    """Find the optimal set of low-tier chow combinations awardable from the
+    current free-chow pool, returning a ``Counter`` of ``yaku_id -> count``.
+
+    A combination may be awarded while at least one of its two chow slots is
+    still free; awarding it consumes (up to) one free copy of each slot. Because
+    different combination types may share a meld, the achievable set depends on
+    ordering, so we search all orderings and keep the best plan."""
+    tokens = Counter((g[0].family, g[0].number) for g in h.free_chows)
+    instances = _low_chow_combo_instances(h)
+
+    memo: dict[tuple, tuple] = {}
+
+    def dfs(state: Counter) -> tuple:
+        key = tuple(sorted((repr(k), v) for k, v in state.items() if v > 0))
+        cached = memo.get(key)
+        if cached is not None:
+            return cached
+        best: tuple = ()
+        for yaku_id, slots in instances:
+            if not any(state.get(t, 0) > 0 for t in slots):
+                continue
+            nxt = state.copy()
+            for t in slots:
+                if nxt.get(t, 0) > 0:
+                    nxt[t] -= 1
+            candidate = (yaku_id,) + dfs(nxt)
+            if _plan_is_better(candidate, best):
+                best = candidate
+        memo[key] = best
+        return best
+
+    return Counter(dfs(tokens))
+
+
+def _take_chow_combo(h: HandContext, yaku_id: int) -> int:
+    """Draw one unit of the given low-tier chow-combination yaku from the
+    context's cached optimal plan (computing the plan on first access)."""
+    if h.chow_combo_plan is None:
+        h.chow_combo_plan = _compute_low_chow_combo_plan(h)
+    if h.chow_combo_plan.get(yaku_id, 0) > 0:
+        h.chow_combo_plan[yaku_id] -= 1
+        return 1
+    return 0
+
+
+def _check_pure_double_chow(h: HandContext) -> int:
+    return _take_chow_combo(h, MahjongMCRYaku.PURE_DOUBLE_CHOW.get_id())
+
+
+def _check_mixed_double_chow(h: HandContext) -> int:
+    return _take_chow_combo(h, MahjongMCRYaku.MIXED_DOUBLE_CHOW.get_id())
+
+
+def _check_short_straight(h: HandContext) -> int:
+    return _take_chow_combo(h,  MahjongMCRYaku.SHORT_STRAIGHT.get_id())
+
+
+def _check_two_terminal_chows(h: HandContext) -> int:
+    return _take_chow_combo(h, MahjongMCRYaku.TWO_TERMINAL_CHOWS.get_id())
 
 
 def _check_pung_of_terminals_or_honors(h: HandContext) -> int:
