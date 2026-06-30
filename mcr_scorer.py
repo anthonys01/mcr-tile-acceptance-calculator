@@ -876,6 +876,16 @@ def _test_scorer():
                 (MahjongMCRYaku.CONCEALED_HAND, 1),
             ]
         ),
+        "12355789789m1!23s": get_ordinal_yakus(
+            [
+                (MahjongMCRYaku.ALL_CHOWS, 1),
+                (MahjongMCRYaku.PURE_DOUBLE_CHOW, 1),
+                (MahjongMCRYaku.ONE_VOIDED_SUIT, 1),
+                (MahjongMCRYaku.MIXED_DOUBLE_CHOW, 1),
+                (MahjongMCRYaku.TWO_TERMINAL_CHOWS, 1),
+                (MahjongMCRYaku.CONCEALED_HAND, 1),
+            ]
+        ),
     }
 
     for hand_str in tests.keys():

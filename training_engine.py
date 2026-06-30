@@ -6,6 +6,7 @@ the game loop while all mahjong logic stays in python.
 """
 
 import json
+import random
 from random import Random
 
 from mahjong_objects import MahjongTile, MahjongHand
@@ -29,14 +30,17 @@ def new_game(seed=None) -> str:
     :return: json list of tile strings (e.g. ["1m", "5z", ...])
     """
     pool = generate_tile_pool()
-    rng = Random(seed) if seed is not None else Random()
+    if not seed:
+        seed = random.randint(0, 2**32 - 1)
+    print(seed)
+    rng = Random(seed)
     rng.shuffle(pool)
     return json.dumps([str(tile) for tile in pool])
 
 
 def _acceptance_number(acceptance_tiles, visible) -> int:
     """Sum over acceptance tiles of (4 - visible count) = tiles still drawable."""
-    return sum(max(0, 4 - visible[tile.index]) for tile in acceptance_tiles)
+    return sum(4 - visible[tile.index] for tile in acceptance_tiles)
 
 
 def _evaluate_discard(tile_strs, discard, visible):
@@ -68,18 +72,21 @@ def analyze_turn(hand_json: str, visible_json: str) -> str:
     visible = json.loads(visible_json)
     hand = _hand_from_tiles(tile_strs, drawn=tile_strs[-1])
 
-    try:
-        (engine_discard, _acc, _score), _away, _best, _yk = get_tile_to_discard_from(
-            hand
-        )
-        engine_discard = str(engine_discard)
-    except (ValueError, AttributeError):
-        engine_discard = tile_strs[-1]
+    (engine_discard, acc, _score), away, best_results, _yk = get_tile_to_discard_from(
+        hand
+    )
+    engine_discard = str(engine_discard)
+    acc_tiles = sorted(acc)
 
     return json.dumps(
         {
             "engine_discard": engine_discard,
-            "engine": _evaluate_discard(tile_strs, engine_discard, visible),
+            "engine": {
+                "acceptance": [str(tile) for tile in acc_tiles],
+                "number": _acceptance_number(acc_tiles, visible),
+                "away": away,
+                "best_results": list(best_results),
+            }
         }
     )
 
@@ -94,10 +101,10 @@ def evaluate_discard(hand_json: str, discard: str, visible_json: str) -> str:
 def score_winning_tiles(
     hand13_json: str,
     acceptance_json: str,
-    self_drawn: bool = True,
+    self_drawn: bool = False,
     last_tile: bool = False,
-    prevalent_wind: int = 1,
-    seat_wind: int = 1,
+    prevalent_wind: int = 0,
+    seat_wind: int = 0,
 ) -> str:
     """
     For every acceptance tile of a tenpai 13-tile hand, build the completed hand

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>MCR Tenpai Trainer</title>
+  <title>MCR Discard Trainer</title>
   <style>
     body {
       font-family: system-ui, Arial, sans-serif;
@@ -128,7 +128,7 @@
     <div>Turn: <b id="s-turns">0</b></div>
     <div>Errors: <b id="s-errors">0</b></div>
     <div>Accuracy: <b id="s-acc">--</b></div>
-    <div>Shanten: <b id="s-shanten">--</b></div>
+    <div>Away: <b id="s-shanten">--</b></div>
   </div>
 
   <div>
@@ -294,7 +294,7 @@
 
       state.turns++;
       const diff = engData.number - userData.number;
-      const isError = userData.number < engData.number;
+      const isError = userData.away > engData.away || (userData.away === engData.away && userData.number < engData.number);
       if (isError) state.errors++;
 
       // perform the discard (visible vector keeps the tile as "seen")
@@ -311,16 +311,17 @@
       let html =
         `<div><b>${isError ? '✗ Suboptimal' : '✓ Good choice'}</b> — `
         + `you discarded ${tileImg(tile, 'mini static')} `
-        + `(acceptance ${userData.number} tiles).</div>`
+        + `(acceptance ${userData.number} tiles) — <b>${userData.away}-away</b>.</div>`
         + `<div>Best discard: ${tileImg(engTile, 'mini static')} `
-        + `(acceptance ${engData.number} tiles). `
-        + `Difference: <b>${diff > 0 ? '-' + diff : diff} tiles</b>.</div>`
-        + `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
-        + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
+        + `(acceptance ${engData.number} tiles) — <b>${engData.away}-away</b>. `
+      if (isError && userData.away === engData.away) {
+        html += `<div>Difference: <b>${diff} tiles</b>.</div>`
+      }
+      html += `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
+          + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
       if (isError) {
-        const lost = engData.best_results.filter(t => !userData.best_results.includes(t));
-        html += `<div class="accrow">Best hand types: <b>${engData.best_results.join(', ') || '—'}</b></div>`
-          + `<div class="accrow">Lost vs your discard: <b>${lost.join(', ') || 'none'}</b></div>`;
+        html += `<div class="accrow">Your best hand types: <b>${userData.best_results.join(', ') || '—'}</b></div>`
+          + `<div class="accrow">Engine's best hand types: <b>${engData.best_results.join(', ') || '—'}</b></div>`;
       }
       fb.className = 'feedback ' + (isError ? 'error' : 'ok');
       fb.innerHTML = html;
