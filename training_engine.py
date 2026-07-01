@@ -171,7 +171,7 @@ def score_winning_tiles(
     for tile_str in acceptance:
         won = _hand_from_tiles(tile_strs + [tile_str], drawn=tile_str)
         _acc, groups, yakus = get_won_hand_yakus(
-            won, self_drawn, last_tile, prevalent_wind, seat_wind
+            won, self_drawn, last_tile, prevalent_wind, seat_wind, True
         )
         won_groups = [[str(tile) for tile in group] for group in groups]
         out.append(

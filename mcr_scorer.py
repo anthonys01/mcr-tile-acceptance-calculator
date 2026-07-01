@@ -593,6 +593,7 @@ def get_won_hand_yakus(
     last_tile: bool = False,
     prevalent_wind=0,
     seat_wind=0,
+    accept_closed_chicken=False
 ) -> tuple[set[MahjongTile], MahjongGroups, list[tuple[MahjongMCRYaku, int]]]:
     """
     Compute the hand tenpai acceptance and yakus
@@ -657,7 +658,10 @@ def get_won_hand_yakus(
         won_hands_scores,
         key=lambda x: sum(times * yaku.get_points() for (yaku, times) in x[1]),
     )
-    return acceptance, best_pattern[0], best_pattern[1]
+    final_yakus = best_pattern[1]
+    if accept_closed_chicken and len(final_yakus) == 1 and final_yakus[0][0] == MahjongMCRYaku.CONCEALED_HAND:
+        final_yakus = [(MahjongMCRYaku.CHICKEN_HAND, 1)]
+    return acceptance, best_pattern[0], final_yakus
 
 
 def get_won_hand_yakus_for_basic_groups(
