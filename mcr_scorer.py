@@ -53,6 +53,38 @@ def _get_acceptance(won_hand: MahjongHand):
     return acceptance
 
 
+def _context_from_base(
+    base: HandContext, acceptance: set[MahjongTile], winning_tile: MahjongTile
+) -> HandContext:
+    """Build a context for another winning tile of the same won_hand.
+
+    The group classification (chows/pungs/kongs/families/...) depends only on
+    the won_hand, so it is reused from ``base``; only ``acceptance`` and the
+    ``winning_tile`` differ. The mutable combination pools are freshly rebuilt by
+    ``HandContext.__post_init__``. Equivalent to re-running ``_get_context`` but
+    without re-classifying the groups on every winning tile.
+    """
+    return HandContext(
+        base.all_tiles,
+        base.groups,
+        base.pair,
+        acceptance,
+        base.chows,
+        base.pungs,
+        base.kongs,
+        base.open_chows,
+        base.open_pungs,
+        base.open_kongs,
+        base.families,
+        base.is_drawn,
+        winning_tile,
+        base.prevalent_wind,
+        base.seat_wind,
+        base.has_knitted_straight,
+        base.is_last_tile,
+    )
+
+
 def _get_context(
     hand: MahjongHand,
     won_hand: Iterable[MahjongGroup],
@@ -129,7 +161,7 @@ def _get_standard_hand_yakus(
     results: dict[MahjongMCRYaku, int] = {}
 
     # First pass: check every yaku once, accumulating counts
-    for yaku in MahjongMCRYaku:
+    for yaku in _ALL_YAKUS:
         if yaku in exclusions:
             continue
         count = yaku.check(hand_context)
@@ -144,8 +176,8 @@ def _get_standard_hand_yakus(
     changed = True
     while changed:
         changed = False
-        for yaku in MahjongMCRYaku:
-            if not yaku.is_multi() or yaku in exclusions:
+        for yaku in _MULTI_YAKUS:
+            if yaku in exclusions:
                 continue
             count = yaku.check(hand_context)
             if count:
@@ -167,6 +199,24 @@ _TILE_DEPENDENT_YAKUS = frozenset(
     }
 )
 
+# Precomputed yaku iteration orders. The scorer loops run millions of times
+# during hand analysis; iterating ``MahjongMCRYaku`` directly goes through the
+# Enum iterator on every pass and forces per-iteration ``is_multi()`` /
+# membership filtering. These tuples preserve enum definition order (so results
+# are unchanged) while turning each loop into a tight iteration over exactly the
+# members it needs.
+_ALL_YAKUS = tuple(MahjongMCRYaku)
+_MULTI_YAKUS = tuple(y for y in _ALL_YAKUS if y.is_multi())
+_TILE_INDEPENDENT_YAKUS = tuple(
+    y for y in _ALL_YAKUS if y not in _TILE_DEPENDENT_YAKUS
+)
+_TILE_INDEPENDENT_MULTI_YAKUS = tuple(
+    y for y in _TILE_INDEPENDENT_YAKUS if y.is_multi()
+)
+_TILE_DEPENDENT_YAKUS_ORDERED = tuple(
+    y for y in _ALL_YAKUS if y in _TILE_DEPENDENT_YAKUS
+)
+
 
 def _get_tile_independent_yakus_and_exclusions(
     context: HandContext,
@@ -176,8 +226,8 @@ def _get_tile_independent_yakus_and_exclusions(
     exclusions = set()
     results: dict = {}
 
-    for yaku in MahjongMCRYaku:
-        if yaku in exclusions or yaku in _TILE_DEPENDENT_YAKUS:
+    for yaku in _TILE_INDEPENDENT_YAKUS:
+        if yaku in exclusions:
             continue
         count = yaku.check(context)
         if count:
@@ -188,12 +238,8 @@ def _get_tile_independent_yakus_and_exclusions(
     changed = True
     while changed:
         changed = False
-        for yaku in MahjongMCRYaku:
-            if (
-                not yaku.is_multi()
-                or yaku in exclusions
-                or yaku in _TILE_DEPENDENT_YAKUS
-            ):
+        for yaku in _TILE_INDEPENDENT_MULTI_YAKUS:
+            if yaku in exclusions:
                 continue
             count = yaku.check(context)
             if count:
@@ -211,8 +257,8 @@ def _get_tile_dependent_yakus(context: HandContext, base_exclusions: set) -> dic
     """
     results: dict = {}
     exclusions = set(base_exclusions)
-    for yaku in MahjongMCRYaku:
-        if yaku not in _TILE_DEPENDENT_YAKUS or yaku in exclusions:
+    for yaku in _TILE_DEPENDENT_YAKUS_ORDERED:
+        if yaku in exclusions:
             continue
         count = yaku.check(context)
         if count:
@@ -273,10 +319,7 @@ def get_best_yakus_for_won_hand(
 
     for winning_tile in winning_tiles:
         acceptance = compute_acceptance(won_hand, winning_tile)
-        hand.drawn_tile = winning_tile
-        dep_context = _get_context(
-            hand, won_hand, acceptance, self_drawn, last_tile, prevalent_wind, seat_wind
-        )
+        dep_context = _context_from_base(base_context, acceptance, winning_tile)
         dep_results = _get_tile_dependent_yakus(dep_context, base_exclusions)
         yakus = _merge_winning_tile_yakus(base_results, dep_results)
         yakus = _replace_with_chicken_when_relevant(yakus)

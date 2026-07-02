@@ -53,6 +53,9 @@ def _compute_acceptance_for_winning_tile(
     return set()
 
 
+_NO_YAKUS = object()
+
+
 def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
     fastest_hands = []
     best_shanten = 13
@@ -74,21 +77,34 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
             fastest_hands.append((groups, residue))
     declared_tiles = hand.declared_tiles.copy()
     kongs = hand.kongs.copy()
+    # The same (won_hand, winning tiles) is produced by many different free-group
+    # decompositions; scoring only depends on those two, so cache it. Different
+    # ``combination``/``residue`` are still emitted as separate results (they
+    # matter for discard selection), only the expensive scoring is shared.
+    scoring_cache: dict = {}
     for combination, residue in fastest_hands:
         if len(residue) > 5:
             continue
         for won_hand, added_tiles in _get_tenpai_hands_from(combination):
-            complete_hand = MahjongHand(_get_flattened_tiles(won_hand))
-            complete_hand.declared_tiles = declared_tiles
-            complete_hand.kongs = kongs
-            best_yakus, _ = get_best_yakus_for_won_hand(
-                complete_hand,
-                won_hand,
-                list(added_tiles),
-                _compute_acceptance_for_winning_tile,
-                prevalent_wind=prevalent_wind,
-                seat_wind=seat_wind,
-            )
+            cache_key = (won_hand, tuple(added_tiles))
+            cached = scoring_cache.get(cache_key)
+            if cached is None:
+                complete_hand = MahjongHand(_get_flattened_tiles(won_hand))
+                complete_hand.declared_tiles = declared_tiles
+                complete_hand.kongs = kongs
+                best_yakus, _ = get_best_yakus_for_won_hand(
+                    complete_hand,
+                    won_hand,
+                    list(added_tiles),
+                    _compute_acceptance_for_winning_tile,
+                    prevalent_wind=prevalent_wind,
+                    seat_wind=seat_wind,
+                )
+                scoring_cache[cache_key] = (
+                    best_yakus if best_yakus else _NO_YAKUS
+                )
+            else:
+                best_yakus = None if cached is _NO_YAKUS else cached
             if best_yakus:
                 results.append(
                     ((combination, residue), added_tiles, best_yakus, won_hand)

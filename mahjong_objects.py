@@ -9,6 +9,11 @@ from itertools import combinations, permutations
 from typing import Iterable
 
 
+# count-vector indexing: 0-8 = 1m-9m, 9-17 = 1p-9p, 18-26 = 1s-9s, 27-33 = 1z-7z
+_FAMILY_OFFSET = {"m": 0, "p": 9, "s": 18, "z": 27}
+NB_TILE_INDICES = 34
+
+
 class Family(Enum):
     """
     tile families
@@ -19,11 +24,14 @@ class Family(Enum):
     CIRCLE = "p"
     HONOR = "z"
 
+    def __init__(self, val_str):
+        self._hash = _FAMILY_OFFSET[val_str]
+
     def __hash__(self):
-        # Deterministic across processes: the default Enum hash is identity
-        # based (randomised per run), which would make sets/dicts keyed by
-        # Family iterate in a non-deterministic order.
-        return _FAMILY_HASH[self.value]
+        # Deterministic across processes and cheap: the default Enum hash is
+        # identity based (randomised per run), and ``self.value`` goes through a
+        # descriptor. ``_value_`` is a plain attribute (unlike the ``value`` descriptor).
+        return self._hash
 
 
 class Constraint(Enum):
@@ -52,14 +60,12 @@ class Constraint(Enum):
     FLUSH_CHARACTER = auto()
 
     def __hash__(self):
-        # Deterministic across processes (see Family.__hash__).
-        return self.value
+        # Deterministic across processes (see Family.__hash__); ``_value_`` is a
+        # plain attribute (unlike the ``value`` descriptor).
+        return self._value_
 
 
-_FAMILY_HASH = {"m": 0, "p": 1, "s": 2, "z": 3}
-
-
-_SYMMETRIC_STR = {
+_SYMMETRIC_STR = frozenset({
     "5z",
     "1p",
     "2p",
@@ -74,12 +80,8 @@ _SYMMETRIC_STR = {
     "6s",
     "8s",
     "9s",
-}
-_GREEN_STR = {"6z", "2s", "3s", "4s", "6s", "8s"}
-
-# count-vector indexing: 0-8 = 1m-9m, 9-17 = 1p-9p, 18-26 = 1s-9s, 27-33 = 1z-7z
-_FAMILY_OFFSET = {"m": 0, "p": 9, "s": 18, "z": 27}
-NB_TILE_INDICES = 34
+})
+_GREEN_STR = frozenset({"6z", "2s", "3s", "4s", "6s", "8s"})
 
 
 class MahjongTile:
@@ -1306,24 +1308,45 @@ class MahjongMCRYaku(Enum):
     # 81 flowers
     # fmt: off
 
+    def __init__(self, yaku_id, points, exclusion_ids, check_fn, is_multi=False):
+        # Unpack the definition tuple once into plain attributes. Accessing
+        # ``self.value[i]`` on every call goes through the (slow) Enum value
+        # descriptor; these hot accessors are called millions of times during
+        # hand analysis, so caching the fields as attributes is a large win.
+        self._id = yaku_id
+        self._points = points
+        self._exclusion_ids = exclusion_ids
+        self._check_fn = check_fn
+        self._is_multi = bool(is_multi)
+        self._exclusions = None  # resolved lazily once all members exist
+
+    def __hash__(self):
+        # Stable, cheap hash (default Enum hash re-hashes the name string on
+        # every set/dict operation, of which there are millions here).
+        return self._id
+
     @staticmethod
     def get(yaku_id: int):
-        for yaku in MahjongMCRYaku:
-            if yaku.get_id() == yaku_id:
-                return yaku
-        raise ValueError(f"Yaku with id {yaku_id} not found")
+        return _YAKU_BY_ID[yaku_id]
 
     def check(self, hand: HandContext) -> int:
-        return self.value[3](hand)
+        return self._check_fn(hand)
 
     def is_multi(self) -> bool:
-        return len(self.value) > 4 and bool(self.value[4])
+        return self._is_multi
 
     def get_points(self) -> int:
-        return self.value[1]
+        return self._points
 
-    def get_exclusions(self) -> "set[MahjongMCRYaku]":
-        return set([MahjongMCRYaku.get(yaku_id) for yaku_id in self.value[2]])
+    def get_exclusions(self) -> "frozenset[MahjongMCRYaku]":
+        if self._exclusions is None:
+            self._exclusions = frozenset(
+                _YAKU_BY_ID[yaku_id] for yaku_id in self._exclusion_ids
+            )
+        return self._exclusions
 
     def get_id(self) -> int:
-        return self.value[0]
+        return self._id
+
+
+_YAKU_BY_ID = {yaku.get_id(): yaku for yaku in MahjongMCRYaku}
