@@ -19,6 +19,12 @@ class Family(Enum):
     CIRCLE = "p"
     HONOR = "z"
 
+    def __hash__(self):
+        # Deterministic across processes: the default Enum hash is identity
+        # based (randomised per run), which would make sets/dicts keyed by
+        # Family iterate in a non-deterministic order.
+        return _FAMILY_HASH[self.value]
+
 
 class Constraint(Enum):
     """
@@ -44,6 +50,13 @@ class Constraint(Enum):
     FLUSH_BAMBOO = auto()
     FLUSH_CIRCLE = auto()
     FLUSH_CHARACTER = auto()
+
+    def __hash__(self):
+        # Deterministic across processes (see Family.__hash__).
+        return self.value
+
+
+_FAMILY_HASH = {"m": 0, "p": 1, "s": 2, "z": 3}
 
 
 _SYMMETRIC_STR = {
@@ -115,10 +128,13 @@ class MahjongTile:
         obj.number = number
         obj.family = family
         obj._str = f"{number}{family.value}"
-        obj._hash = hash(key)
         # count-vector index (0..33); it also encodes the total order m<p<s<z
         # then ascending number, matching the original __lt__ semantics
         obj.index = _FAMILY_OFFSET[family.value] + number - 1
+        # hash from the stable index (not hash(key)): tiles are interned so
+        # equality is identity, and Family enum members hash per-process, which
+        # would otherwise make set/dict iteration order non-deterministic.
+        obj._hash = obj.index
 
         _is_honor = family == Family.HONOR
         obj._is_honor = _is_honor

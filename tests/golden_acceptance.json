@@ -1,0 +1,2853 @@
+{
+  "(111)44778m(222)334p": {
+    "acceptance": {
+      "All Pungs": [
+        "3p",
+        "4m",
+        "7m"
+      ],
+      "All Types": [],
+      "Basic": [
+        "3p",
+        "4m",
+        "7m"
+      ],
+      "First or Last n tiles": [
+        "1p",
+        "2p",
+        "3p",
+        "4m",
+        "4p"
+      ]
+    },
+    "best_results": [
+      "All Pungs",
+      "Basic"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [
+        "3p",
+        "4m",
+        "7m"
+      ],
+      "acceptance_by_type": {
+        "All Pungs": [
+          "3p",
+          "4m",
+          "7m"
+        ]
+      },
+      "acceptance_count": 6,
+      "away_after_discard": 1,
+      "best_results": [
+        "All Pungs",
+        "Basic"
+      ],
+      "tile": "8m"
+    },
+    "needs_discard": true
+  },
+  "(123)(789)m223s11445z": {
+    "acceptance": {
+      "Basic": [
+        "1s",
+        "1z",
+        "4z"
+      ],
+      "Half Flush": [
+        "1z",
+        "4z",
+        "5z"
+      ],
+      "Mixed Shifted": [
+        "3p",
+        "4p",
+        "4s",
+        "5p"
+      ],
+      "Mixed Straight": [
+        "1s",
+        "4p",
+        "5p",
+        "6p"
+      ],
+      "Pure Shifted": [
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m"
+      ],
+      "Pure Straight": [
+        "4m",
+        "5m",
+        "6m"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2p",
+        "3p"
+      ]
+    },
+    "best_results": [
+      "Basic"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [
+        "1s",
+        "1z",
+        "4z"
+      ],
+      "acceptance_by_type": {
+        "Outside Hand": [
+          "1s",
+          "1z",
+          "4z"
+        ]
+      },
+      "acceptance_count": 8,
+      "away_after_discard": 1,
+      "best_results": [
+        "Basic"
+      ],
+      "tile": "5z"
+    },
+    "needs_discard": true
+  },
+  "(123)45678m(222)334p": {
+    "acceptance": {
+      "All Types": [],
+      "Basic": [
+        "9m"
+      ],
+      "First or Last n tiles": [
+        "2m",
+        "2p",
+        "3m",
+        "3p",
+        "4m",
+        "4p"
+      ],
+      "Mixed Shifted": [
+        "2p",
+        "3p",
+        "3s",
+        "4m",
+        "4s",
+        "5m",
+        "5s",
+        "6m",
+        "7m",
+        "8m"
+      ],
+      "Mixed Straight": [
+        "5p",
+        "6p",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "3m",
+        "5m"
+      ],
+      "Pure Straight": [
+        "9m"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2p",
+        "2s",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "5m",
+        "6m",
+        "7m",
+        "8m"
+      ]
+    },
+    "best_results": [
+      "Basic",
+      "Pure Straight"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "9m"
+      ],
+      "acceptance_by_type": {
+        "Pure Straight": [
+          "9m"
+        ]
+      },
+      "acceptance_count": 4,
+      "away_after_discard": 0,
+      "best_results": [
+        "Basic",
+        "Pure Straight"
+      ],
+      "tile": "4p"
+    },
+    "needs_discard": true
+  },
+  "(123)678m667p223s11z": {
+    "acceptance": {
+      "All Types": [
+        "1s",
+        "1z",
+        "2s",
+        "4s",
+        "5p",
+        "6p",
+        "8p"
+      ],
+      "Basic": [
+        "2s",
+        "4s",
+        "5p",
+        "6p"
+      ],
+      "Half Flush": [
+        "1z",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "1m",
+        "3p",
+        "4m",
+        "5s",
+        "8s",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "3p",
+        "4p",
+        "4s",
+        "5p"
+      ],
+      "Mixed Straight": [
+        "1s",
+        "4p",
+        "5p",
+        "9m"
+      ],
+      "Pure Shifted": [
+        "1s",
+        "1z",
+        "2m",
+        "2s",
+        "3m",
+        "4m",
+        "4s",
+        "5m",
+        "5p",
+        "6m",
+        "6p",
+        "8p"
+      ],
+      "Pure Straight": [
+        "1s",
+        "1z",
+        "2s",
+        "4m",
+        "4s",
+        "5m",
+        "5p",
+        "6p",
+        "8p",
+        "9m"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2p",
+        "3p"
+      ]
+    },
+    "best_results": [
+      "Basic"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [
+        "4s",
+        "5p",
+        "6p"
+      ],
+      "acceptance_by_type": {
+        "Chicken Hand": [
+          "4s",
+          "5p",
+          "6p"
+        ]
+      },
+      "acceptance_count": 10,
+      "away_after_discard": 1,
+      "best_results": [
+        "Basic"
+      ],
+      "tile": "2s"
+    },
+    "needs_discard": true
+  },
+  "(123)m(234)s334p(111)55z": {
+    "acceptance": {
+      "All Types": [
+        "2p",
+        "3p",
+        "5p",
+        "5z"
+      ],
+      "Basic": [
+        "2p",
+        "5p",
+        "5z"
+      ],
+      "First or Last n tiles": [
+        "2p",
+        "3p",
+        "4p"
+      ],
+      "Mixed Shifted": [
+        "5p"
+      ]
+    },
+    "best_results": [
+      "All Types",
+      "Basic",
+      "Mixed Shifted"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "2p",
+        "5p"
+      ],
+      "acceptance_by_type": {
+        "All Types": [
+          "2p",
+          "5p"
+        ],
+        "Mixed Shifted": [
+          "5p"
+        ]
+      },
+      "acceptance_count": 8,
+      "away_after_discard": 0,
+      "best_results": [
+        "All Types",
+        "Basic",
+        "Mixed Shifted"
+      ],
+      "tile": "3p"
+    },
+    "needs_discard": true
+  },
+  "11122233344455m": {
+    "acceptance": {
+      "All Pungs": [
+        "5m"
+      ],
+      "All Types": [],
+      "First or Last n tiles": [
+        "1m",
+        "2m",
+        "3m",
+        "4m"
+      ],
+      "Half Flush": [],
+      "Knitted": [
+        "2p",
+        "3s",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "2p",
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "5s"
+      ],
+      "Mixed Straight": [
+        "4p",
+        "5p",
+        "6p",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "6m",
+        "7m"
+      ],
+      "Pure Straight": [
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "2m",
+        "3m",
+        "4m"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2p",
+        "2s",
+        "3p",
+        "3s"
+      ]
+    },
+    "best_results": [
+      "All Pungs",
+      "Half Flush"
+    ],
+    "closest_away": 0,
+    "discard": {
+      "error": "No tile to discard"
+    },
+    "needs_discard": true
+  },
+  "1112345678999m": {
+    "acceptance": {
+      "All Pungs": [
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m"
+      ],
+      "All Types": [],
+      "Basic": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "First or Last n tiles": [
+        "1m",
+        "2m",
+        "3m",
+        "4m"
+      ],
+      "Half Flush": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "2p",
+        "3s",
+        "5p",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "2p",
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "5s"
+      ],
+      "Mixed Straight": [
+        "4p",
+        "5p",
+        "6p",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "3m",
+        "5m"
+      ],
+      "Pure Straight": [
+        "1m",
+        "9m"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2p",
+        "2s",
+        "3p",
+        "3s"
+      ]
+    },
+    "best_results": [
+      "Basic",
+      "Half Flush",
+      "Pure Straight"
+    ],
+    "closest_away": 0,
+    "needs_discard": false
+  },
+  "1122334455667p": {
+    "acceptance": {
+      "All Pungs": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p"
+      ],
+      "All Types": [],
+      "Basic": [
+        "1p",
+        "4p",
+        "7p"
+      ],
+      "First or Last n tiles": [
+        "1p",
+        "2p",
+        "3p",
+        "4p"
+      ],
+      "Half Flush": [
+        "1p",
+        "4p",
+        "7p"
+      ],
+      "Knitted": [
+        "2m",
+        "3s",
+        "5m",
+        "6s",
+        "8m",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "1m",
+        "2m",
+        "3m",
+        "3s",
+        "4s",
+        "5s"
+      ],
+      "Mixed Straight": [
+        "1m",
+        "2m",
+        "3m",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "6p"
+      ],
+      "Pure Straight": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "6p",
+        "8p",
+        "9p"
+      ],
+      "Seven Pairs": [
+        "7p"
+      ],
+      "Symmetry": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p"
+      ],
+      "Triple Chows": [
+        "1m",
+        "1s",
+        "2m",
+        "2s",
+        "3m",
+        "3s"
+      ]
+    },
+    "best_results": [
+      "Basic",
+      "Half Flush",
+      "Seven Pairs"
+    ],
+    "closest_away": 0,
+    "needs_discard": false
+  },
+  "112233m112233p11s": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1p",
+        "2m",
+        "2p",
+        "3m"
+      ],
+      "All Types": [],
+      "First or Last n tiles": [],
+      "Half Flush": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m"
+      ],
+      "Knitted": [
+        "4s",
+        "5m",
+        "6p",
+        "7s",
+        "8m",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "3s",
+        "4p",
+        "4s",
+        "5s"
+      ],
+      "Mixed Straight": [
+        "4p",
+        "5p",
+        "6p",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "4m",
+        "5m",
+        "6m",
+        "7m"
+      ],
+      "Pure Straight": [
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Seven Pairs": [],
+      "Symmetry": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p"
+      ],
+      "Triple Chows": [
+        "1m",
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s"
+      ]
+    },
+    "best_results": [
+      "First or Last n tiles",
+      "Seven Pairs"
+    ],
+    "closest_away": 0,
+    "discard": {
+      "error": "No tile to discard"
+    },
+    "needs_discard": true
+  },
+  "123479s67p448m466z": {
+    "acceptance": {
+      "All Pungs": [
+        "1s",
+        "2s",
+        "3s",
+        "4m",
+        "4s",
+        "4z",
+        "6p",
+        "6z",
+        "7p",
+        "7s",
+        "8m",
+        "9s"
+      ],
+      "All Types": [
+        "4m",
+        "4z",
+        "5p",
+        "6z",
+        "8p"
+      ],
+      "Basic": [
+        "4m",
+        "5p",
+        "8p",
+        "8s"
+      ],
+      "First or Last n tiles": [
+        "1s",
+        "2s",
+        "3s",
+        "4m",
+        "4s"
+      ],
+      "Half Flush": [
+        "1s",
+        "2s",
+        "3s",
+        "4s",
+        "4z",
+        "5s",
+        "6s",
+        "8s"
+      ],
+      "Knitted": [
+        "1s",
+        "2m",
+        "3p",
+        "4m",
+        "4s",
+        "5m",
+        "6z",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "5p",
+        "6m",
+        "7m",
+        "8s"
+      ],
+      "Mixed Straight": [
+        "5m",
+        "6m",
+        "8p",
+        "8s",
+        "9p"
+      ],
+      "Pure Shifted": [
+        "3s",
+        "4m",
+        "5p",
+        "5s",
+        "6s",
+        "6z",
+        "8p"
+      ],
+      "Pure Straight": [
+        "4m",
+        "5p",
+        "5s",
+        "6s",
+        "6z",
+        "8p",
+        "8s"
+      ],
+      "Seven Pairs": [
+        "1s",
+        "2s",
+        "3s",
+        "4s",
+        "4z",
+        "6p",
+        "7p",
+        "7s",
+        "8m",
+        "9s"
+      ],
+      "Triple Chows": [
+        "6m",
+        "6s",
+        "7m",
+        "8p",
+        "8s"
+      ]
+    },
+    "best_results": [
+      "Basic"
+    ],
+    "closest_away": 3,
+    "discard": {
+      "acceptance": [
+        "4m",
+        "5p",
+        "8p",
+        "8s"
+      ],
+      "acceptance_by_type": {
+        "Chicken Hand": [
+          "4m",
+          "5p",
+          "8p",
+          "8s"
+        ]
+      },
+      "acceptance_count": 14,
+      "away_after_discard": 2,
+      "best_results": [
+        "Basic"
+      ],
+      "tile": "4z"
+    },
+    "needs_discard": true
+  },
+  "13m588p36s124566z": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1z",
+        "2z",
+        "3m",
+        "3s",
+        "4z",
+        "5p",
+        "5z",
+        "6s",
+        "6z",
+        "8p"
+      ],
+      "All Types": [
+        "1s",
+        "1z",
+        "2m",
+        "2s",
+        "2z",
+        "3s",
+        "4s",
+        "4z",
+        "5s",
+        "6s",
+        "6z",
+        "7s",
+        "8p",
+        "8s"
+      ],
+      "Basic": [
+        "1s",
+        "1z",
+        "2m",
+        "2s",
+        "2z",
+        "3p",
+        "3s",
+        "3z",
+        "4p",
+        "4s",
+        "4z",
+        "5p",
+        "5s",
+        "5z",
+        "6p",
+        "6s",
+        "6z",
+        "7p",
+        "7s",
+        "7z",
+        "8p",
+        "8s"
+      ],
+      "Half Flush": [
+        "1z",
+        "2m",
+        "2z",
+        "4z",
+        "5z",
+        "6z"
+      ],
+      "Knitted": [
+        "2p",
+        "3z",
+        "4m",
+        "7m",
+        "7z",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "2m",
+        "2s",
+        "3p",
+        "4p",
+        "4s",
+        "6z",
+        "8p"
+      ],
+      "Mixed Straight": [
+        "2m",
+        "4p",
+        "6p",
+        "6z",
+        "7s",
+        "8p",
+        "8s",
+        "9s"
+      ],
+      "Pure Shifted": [
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "6z",
+        "7m",
+        "8p"
+      ],
+      "Pure Straight": [
+        "2m",
+        "4m",
+        "5m",
+        "6m",
+        "6z",
+        "7m",
+        "8m",
+        "8p",
+        "9m"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "1z",
+        "2z",
+        "3m",
+        "3s",
+        "4z",
+        "5p",
+        "5z",
+        "6s"
+      ],
+      "Symmetry": [
+        "5p",
+        "5z",
+        "6s",
+        "8p"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3p",
+        "6z",
+        "8p"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 3,
+    "needs_discard": false
+  },
+  "147m258p369s12(333)m": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "2m",
+        "2p",
+        "3s",
+        "4m",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "All Types": [
+        "2p",
+        "3s",
+        "5p",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Basic": [
+        "1m",
+        "1p",
+        "1s",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "5m",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "First or Last n tiles": [
+        "1p",
+        "1s",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4p",
+        "4s"
+      ],
+      "Half Flush": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "1m",
+        "2m"
+      ],
+      "Mixed Shifted": [
+        "3m",
+        "3p",
+        "4p",
+        "4s",
+        "5s"
+      ],
+      "Mixed Straight": [
+        "1m",
+        "2p",
+        "3m",
+        "3s",
+        "4m",
+        "4p",
+        "6p",
+        "6s",
+        "7m",
+        "7s",
+        "8p",
+        "8s"
+      ],
+      "Pure Shifted": [
+        "1m",
+        "2p",
+        "3m",
+        "3s",
+        "5m",
+        "5p",
+        "6m",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Pure Straight": [
+        "1m",
+        "2p",
+        "3m",
+        "3s",
+        "5m",
+        "5p",
+        "6m",
+        "6s",
+        "8m",
+        "8p",
+        "9m",
+        "9s"
+      ],
+      "Triple Chows": [
+        "2s",
+        "3m",
+        "3p",
+        "4p",
+        "4s"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "2m"
+      ],
+      "acceptance_by_type": {
+        "Knitted": [
+          "2m"
+        ]
+      },
+      "acceptance_count": 3,
+      "away_after_discard": 0,
+      "best_results": [
+        "Knitted"
+      ],
+      "tile": "1m"
+    },
+    "needs_discard": true
+  },
+  "147m258p369s147m2p": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "2p",
+        "3s",
+        "4m",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "All Types": [
+        "1m",
+        "1s",
+        "2p",
+        "2s",
+        "3s",
+        "4m",
+        "4s",
+        "5s",
+        "6s",
+        "7m",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Basic": [
+        "1m",
+        "1s",
+        "2p",
+        "2s",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s",
+        "5p",
+        "5s",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8p",
+        "8s",
+        "9p",
+        "9s"
+      ],
+      "First or Last n tiles": [
+        "1m",
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s"
+      ],
+      "Half Flush": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "1m",
+        "2p",
+        "4m",
+        "7m"
+      ],
+      "Mixed Shifted": [
+        "2m",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "4s",
+        "5s",
+        "7m"
+      ],
+      "Mixed Straight": [
+        "2m",
+        "2p",
+        "3m",
+        "4m",
+        "4p",
+        "6p",
+        "7m",
+        "7s",
+        "8s"
+      ],
+      "Pure Shifted": [
+        "1m",
+        "2m",
+        "2p",
+        "3m",
+        "5m",
+        "6m",
+        "8m"
+      ],
+      "Pure Straight": [
+        "1m",
+        "1p",
+        "3p",
+        "4m",
+        "4p",
+        "6p",
+        "7m",
+        "7p",
+        "9p"
+      ],
+      "Seven Pairs": [
+        "3s",
+        "5p",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Symmetry": [
+        "3p",
+        "4p",
+        "4s",
+        "5p",
+        "5s",
+        "6s",
+        "8p",
+        "8s",
+        "9p",
+        "9s"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2m",
+        "2s",
+        "3m",
+        "3p",
+        "4m",
+        "7m"
+      ]
+    },
+    "best_results": [
+      "Knitted",
+      "Seven Pairs"
+    ],
+    "closest_away": 2,
+    "needs_discard": false
+  },
+  "147m258p369s22334m": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "2m",
+        "2p",
+        "3m",
+        "3s",
+        "4m",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "All Types": [
+        "2p",
+        "3s",
+        "5p",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Basic": [
+        "1m",
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s",
+        "5m",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "First or Last n tiles": [
+        "1m",
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s"
+      ],
+      "Half Flush": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "2m",
+        "3m",
+        "5m"
+      ],
+      "Mixed Shifted": [
+        "1m",
+        "3p",
+        "4m",
+        "4p",
+        "4s",
+        "5p",
+        "5s",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "Mixed Straight": [
+        "1m",
+        "2p",
+        "3s",
+        "4m",
+        "4p",
+        "6p",
+        "6s",
+        "7m",
+        "7s",
+        "8p",
+        "8s"
+      ],
+      "Pure Shifted": [
+        "2p",
+        "3m",
+        "3s",
+        "5m",
+        "5p",
+        "6m",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Pure Straight": [
+        "2p",
+        "3s",
+        "5m",
+        "5p",
+        "6m",
+        "6s",
+        "8m",
+        "8p",
+        "9m",
+        "9s"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "2p",
+        "3s",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ],
+      "Symmetry": [
+        "2p",
+        "5p",
+        "6s",
+        "8p",
+        "9s"
+      ],
+      "Triple Chows": [
+        "1m",
+        "1p",
+        "1s",
+        "2s",
+        "3p",
+        "4m",
+        "5p",
+        "6s",
+        "7m",
+        "8p",
+        "9s"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "2m",
+        "5m"
+      ],
+      "acceptance_by_type": {
+        "Knitted": [
+          "2m",
+          "5m"
+        ]
+      },
+      "acceptance_count": 6,
+      "away_after_discard": 0,
+      "best_results": [
+        "Knitted"
+      ],
+      "tile": "3m"
+    },
+    "needs_discard": true
+  },
+  "147m258p36s124566z": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1z",
+        "2p",
+        "2z",
+        "3s",
+        "4m",
+        "4z",
+        "5p",
+        "5z",
+        "6s",
+        "6z",
+        "7m",
+        "8p"
+      ],
+      "All Types": [
+        "1m",
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p"
+      ],
+      "Half Flush": [
+        "1m",
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "4m",
+        "4z",
+        "5m",
+        "5z",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Knitted": [
+        "3z",
+        "7z",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "5z",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p"
+      ],
+      "Mixed Straight": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "5z",
+        "6m",
+        "6p",
+        "7m",
+        "7p",
+        "8m",
+        "9m",
+        "9p"
+      ],
+      "Pure Shifted": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "5z",
+        "6m",
+        "6p",
+        "6s",
+        "7p",
+        "7s",
+        "8p",
+        "8s",
+        "9p"
+      ],
+      "Pure Straight": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "5z",
+        "6m",
+        "6p",
+        "6s",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "1z",
+        "2p",
+        "2z",
+        "3s",
+        "4m",
+        "4z",
+        "5p",
+        "5z",
+        "6s",
+        "7m",
+        "8p"
+      ],
+      "Symmetry": [
+        "2p",
+        "5p",
+        "5z",
+        "6s",
+        "8p"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "4s",
+        "4z",
+        "5m",
+        "5p",
+        "5s",
+        "5z",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "3z",
+        "7z",
+        "9s"
+      ],
+      "acceptance_by_type": {
+        "Knitted": [
+          "3z",
+          "7z",
+          "9s"
+        ]
+      },
+      "acceptance_count": 12,
+      "away_after_discard": 0,
+      "best_results": [
+        "Knitted"
+      ],
+      "tile": "6z"
+    },
+    "needs_discard": true
+  },
+  "147m28899s334566p": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "2s",
+        "3p",
+        "4m",
+        "4p",
+        "5p",
+        "6p",
+        "7m",
+        "8s",
+        "9s"
+      ],
+      "All Types": [
+        "1m",
+        "2m",
+        "3m",
+        "4m",
+        "5m",
+        "6m",
+        "7m",
+        "8m",
+        "9m"
+      ],
+      "Basic": [
+        "1m",
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s",
+        "5m",
+        "5p",
+        "6m",
+        "6p",
+        "7m",
+        "7p",
+        "7s",
+        "8p",
+        "8s",
+        "9s"
+      ],
+      "First or Last n tiles": [
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9s"
+      ],
+      "Half Flush": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "6p",
+        "7p",
+        "8p"
+      ],
+      "Knitted": [
+        "5s",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "2m",
+        "3m",
+        "3s",
+        "4s",
+        "6p",
+        "7s",
+        "8s",
+        "9s"
+      ],
+      "Mixed Straight": [
+        "2m",
+        "3m",
+        "7s"
+      ],
+      "Pure Shifted": [
+        "1p",
+        "2p",
+        "5p",
+        "7p",
+        "8s",
+        "9s"
+      ],
+      "Pure Straight": [
+        "2m",
+        "3m",
+        "5m",
+        "6m",
+        "8m",
+        "9m"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "2s",
+        "4m",
+        "4p",
+        "5p",
+        "7m"
+      ],
+      "Symmetry": [
+        "1p",
+        "2p",
+        "2s",
+        "3p",
+        "4p",
+        "4s",
+        "5p",
+        "8s",
+        "9s"
+      ],
+      "Triple Chows": [
+        "1p",
+        "1s",
+        "2m",
+        "2p",
+        "3m",
+        "3s"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [],
+      "acceptance_by_type": {
+        "Knitted": []
+      },
+      "acceptance_count": 0,
+      "away_after_discard": 1,
+      "best_results": [
+        "Knitted"
+      ],
+      "tile": "8s"
+    },
+    "needs_discard": true
+  },
+  "147m289s346p12347z": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1z",
+        "2s",
+        "2z",
+        "3p",
+        "3z",
+        "4m",
+        "4p",
+        "4z",
+        "6p",
+        "7m",
+        "7z",
+        "8s",
+        "9s"
+      ],
+      "All Types": [
+        "1m",
+        "1z",
+        "2p",
+        "2s",
+        "2z",
+        "3z",
+        "4m",
+        "4z",
+        "5p",
+        "7m",
+        "7z",
+        "8s",
+        "9s"
+      ],
+      "First or Last n tiles": [
+        "1m",
+        "2s",
+        "3p",
+        "4m",
+        "4p"
+      ],
+      "Half Flush": [
+        "1z",
+        "2p",
+        "2z",
+        "3p",
+        "3z",
+        "4z",
+        "5p",
+        "6p",
+        "7z"
+      ],
+      "Knitted": [
+        "5s",
+        "5z",
+        "6z",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "3s",
+        "3z",
+        "4m",
+        "4s",
+        "4z",
+        "5p",
+        "6p",
+        "7m",
+        "7s",
+        "7z"
+      ],
+      "Mixed Straight": [
+        "1z",
+        "2m",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3z",
+        "4m",
+        "4z",
+        "5p",
+        "7m",
+        "7s",
+        "7z"
+      ],
+      "Pure Shifted": [
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3z",
+        "4p",
+        "4z",
+        "5m",
+        "5p",
+        "6m",
+        "6p",
+        "7s",
+        "7z",
+        "8s",
+        "9s"
+      ],
+      "Pure Straight": [
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3z",
+        "4p",
+        "4z",
+        "5m",
+        "5p",
+        "6m",
+        "6p",
+        "7s",
+        "7z",
+        "8m",
+        "8s",
+        "9m",
+        "9s"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "1z",
+        "2s",
+        "2z",
+        "3p",
+        "3z",
+        "4m",
+        "4p",
+        "4z",
+        "6p",
+        "7m",
+        "7z",
+        "8s",
+        "9s"
+      ],
+      "Symmetry": [
+        "2s",
+        "3p",
+        "4p",
+        "8s",
+        "9s"
+      ],
+      "Triple Chows": [
+        "1m",
+        "1z",
+        "2m",
+        "2p",
+        "2z",
+        "3m",
+        "3s",
+        "3z",
+        "4s",
+        "4z",
+        "6p",
+        "7m",
+        "7s",
+        "7z"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [
+        "5s",
+        "5z",
+        "6z",
+        "9p"
+      ],
+      "acceptance_by_type": {
+        "Knitted": [
+          "5s",
+          "5z",
+          "6z",
+          "9p"
+        ]
+      },
+      "acceptance_count": 16,
+      "away_after_discard": 1,
+      "best_results": [
+        "Knitted"
+      ],
+      "tile": "9s"
+    },
+    "needs_discard": true
+  },
+  "19m19p19s1234567z": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1p",
+        "1s",
+        "1z",
+        "2z",
+        "3z",
+        "4z",
+        "5z",
+        "6z",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "All Types": [
+        "1m",
+        "1p",
+        "1s",
+        "1z",
+        "2z",
+        "3z",
+        "4z",
+        "5z",
+        "6z",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "Half Flush": [
+        "1m",
+        "1z",
+        "2z",
+        "3z",
+        "4z",
+        "5z",
+        "6z",
+        "7z",
+        "9m"
+      ],
+      "Knitted": [
+        "2p",
+        "3s",
+        "4m",
+        "5p",
+        "6s",
+        "7m",
+        "8p"
+      ],
+      "Mixed Shifted": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2p",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "3z",
+        "4p",
+        "4s",
+        "4z",
+        "5s",
+        "5z",
+        "6z",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "Mixed Straight": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "3z",
+        "4p",
+        "4z",
+        "5p",
+        "5z",
+        "6p",
+        "6z",
+        "7s",
+        "7z",
+        "8s",
+        "9m",
+        "9p"
+      ],
+      "Pure Shifted": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "3z",
+        "4m",
+        "4z",
+        "5m",
+        "5z",
+        "6m",
+        "6z",
+        "7m",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "Pure Straight": [
+        "1p",
+        "1s",
+        "1z",
+        "2m",
+        "2z",
+        "3m",
+        "3z",
+        "4m",
+        "4z",
+        "5m",
+        "5z",
+        "6m",
+        "6z",
+        "7m",
+        "7z",
+        "8m",
+        "9p",
+        "9s"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "1p",
+        "1s",
+        "1z",
+        "2z",
+        "3z",
+        "4z",
+        "5z",
+        "6z",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ],
+      "Triple Chows": [
+        "1z",
+        "2m",
+        "2p",
+        "2s",
+        "2z",
+        "3m",
+        "3p",
+        "3s",
+        "3z",
+        "4z",
+        "5z",
+        "6z",
+        "7z",
+        "9m",
+        "9p",
+        "9s"
+      ]
+    },
+    "best_results": [
+      "Knitted"
+    ],
+    "closest_away": 4,
+    "needs_discard": false
+  },
+  "34s4455m668899p77z": {
+    "acceptance": {
+      "All Pungs": [
+        "4m",
+        "5m",
+        "6p",
+        "8p",
+        "9p"
+      ],
+      "All Types": [
+        "2s",
+        "3m",
+        "4m",
+        "5m",
+        "5s",
+        "6m",
+        "6p",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ],
+      "Basic": [
+        "2s",
+        "3m",
+        "4m",
+        "5m",
+        "5s",
+        "6m",
+        "6p",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ],
+      "First or Last n tiles": [
+        "6p",
+        "7p",
+        "8p",
+        "9p"
+      ],
+      "Half Flush": [
+        "4p",
+        "5p",
+        "6p",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ],
+      "Knitted": [
+        "1s",
+        "2m",
+        "3m",
+        "3p",
+        "4m",
+        "6m",
+        "7p",
+        "7s",
+        "7z",
+        "8m",
+        "8p"
+      ],
+      "Mixed Shifted": [
+        "2s",
+        "3m",
+        "4p",
+        "5p",
+        "6m",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ],
+      "Mixed Straight": [
+        "1s",
+        "2s",
+        "3m",
+        "6m",
+        "6p",
+        "7p",
+        "7z"
+      ],
+      "Pure Shifted": [
+        "1m",
+        "2m",
+        "2s",
+        "3m",
+        "5s",
+        "6m",
+        "6p",
+        "7m",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ],
+      "Pure Straight": [
+        "1p",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "5m",
+        "5p",
+        "5s",
+        "6m",
+        "7p",
+        "7z"
+      ],
+      "Seven Pairs": [
+        "3s",
+        "4s"
+      ],
+      "Symmetry": [
+        "4s",
+        "8p",
+        "9p"
+      ],
+      "Triple Chows": [
+        "3m",
+        "3p",
+        "4p",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "7p",
+        "7z",
+        "8p",
+        "9p"
+      ]
+    },
+    "best_results": [
+      "Seven Pairs"
+    ],
+    "closest_away": 1,
+    "discard": {
+      "acceptance": [
+        "4s"
+      ],
+      "acceptance_by_type": {
+        "Seven Pairs": [
+          "4s"
+        ]
+      },
+      "acceptance_count": 3,
+      "away_after_discard": 0,
+      "best_results": [
+        "Seven Pairs"
+      ],
+      "tile": "3s"
+    },
+    "needs_discard": true
+  },
+  "45s13447m135799p": {
+    "acceptance": {
+      "All Pungs": [
+        "1m",
+        "1p",
+        "3m",
+        "3p",
+        "4m",
+        "4s",
+        "5p",
+        "5s",
+        "7m",
+        "7p",
+        "9p"
+      ],
+      "All Types": [
+        "2m",
+        "2p",
+        "3s",
+        "4m",
+        "4p",
+        "5m",
+        "6p",
+        "6s",
+        "8p",
+        "9p"
+      ],
+      "Basic": [
+        "2m",
+        "2p",
+        "3s",
+        "4p",
+        "5m",
+        "6p",
+        "6s",
+        "8p"
+      ],
+      "First or Last n tiles": [
+        "1m",
+        "1p",
+        "2m",
+        "2p",
+        "2s",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "4s"
+      ],
+      "Half Flush": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "6p",
+        "7p",
+        "8p",
+        "9p"
+      ],
+      "Knitted": [
+        "1p",
+        "2m",
+        "2s",
+        "3m",
+        "4m",
+        "4s",
+        "5m",
+        "5p",
+        "6p",
+        "7p",
+        "8p",
+        "8s",
+        "9p"
+      ],
+      "Mixed Shifted": [
+        "2p",
+        "5m",
+        "6p",
+        "6s"
+      ],
+      "Mixed Straight": [
+        "2m",
+        "2p",
+        "4p",
+        "6s",
+        "8p"
+      ],
+      "Pure Shifted": [
+        "2m",
+        "2p",
+        "3m",
+        "3s",
+        "4p",
+        "5m",
+        "6m",
+        "6p",
+        "6s"
+      ],
+      "Pure Straight": [
+        "2m",
+        "2p",
+        "3s",
+        "4p",
+        "6p",
+        "6s",
+        "8p"
+      ],
+      "Seven Pairs": [
+        "1m",
+        "1p",
+        "3m",
+        "3p",
+        "4s",
+        "5p",
+        "5s",
+        "7m",
+        "7p"
+      ],
+      "Symmetry": [
+        "1p",
+        "2p",
+        "2s",
+        "3p",
+        "4p",
+        "4s",
+        "5p",
+        "5s",
+        "6s",
+        "9p"
+      ],
+      "Triple Chows": [
+        "1m",
+        "1p",
+        "2m",
+        "2p",
+        "3m",
+        "3p",
+        "3s",
+        "4m",
+        "4p",
+        "5m",
+        "5p",
+        "6m",
+        "6p",
+        "7m",
+        "7p",
+        "8m",
+        "8p",
+        "9m",
+        "9p"
+      ]
+    },
+    "best_results": [
+      "Basic",
+      "Mixed Shifted",
+      "Mixed Straight"
+    ],
+    "closest_away": 3,
+    "needs_discard": false
+  },
+  "67m344568p345688s": {
+    "acceptance": {
+      "All Pungs": [
+        "3p",
+        "3s",
+        "4p",
+        "4s",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "8p",
+        "8s"
+      ],
+      "All Types": [
+        "5m",
+        "8m"
+      ],
+      "Basic": [
+        "2p",
+        "5m",
+        "5p",
+        "7p",
+        "8m"
+      ],
+      "First or Last n tiles": [
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "7p",
+        "7s",
+        "8m",
+        "8p",
+        "8s",
+        "9m",
+        "9p"
+      ],
+      "Half Flush": [
+        "1p",
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "6p",
+        "7p",
+        "8p",
+        "9p"
+      ],
+      "Knitted": [
+        "1m",
+        "2p",
+        "3s",
+        "4m",
+        "4p",
+        "5p",
+        "6s",
+        "8s",
+        "9s"
+      ],
+      "Mixed Shifted": [
+        "5m",
+        "5p",
+        "7p"
+      ],
+      "Mixed Straight": [
+        "1p",
+        "2p",
+        "8m",
+        "9m"
+      ],
+      "Pure Shifted": [
+        "2p",
+        "6p",
+        "7p"
+      ],
+      "Pure Straight": [
+        "1p",
+        "2p",
+        "7p",
+        "9p"
+      ],
+      "Seven Pairs": [
+        "3p",
+        "3s",
+        "4s",
+        "5p",
+        "5s",
+        "6m",
+        "6p",
+        "6s",
+        "7m",
+        "8p"
+      ],
+      "Symmetry": [
+        "2p",
+        "3p",
+        "4p",
+        "5p",
+        "8p",
+        "8s",
+        "9p"
+      ],
+      "Triple Chows": [
+        "2p",
+        "4m",
+        "5m",
+        "5p"
+      ]
+    },
+    "best_results": [
+      "Basic",
+      "Mixed Shifted"
+    ],
+    "closest_away": 2,
+    "discard": {
+      "acceptance": [
+        "2p",
+        "5m",
+        "5p",
+        "7p",
+        "8m"
+      ],
+      "acceptance_by_type": {
+        "Basic": [
+          "2p",
+          "5m",
+          "5p",
+          "7p",
+          "8m"
+        ],
+        "Mixed Shifted": [
+          "5m",
+          "5p",
+          "7p"
+        ]
+      },
+      "acceptance_count": 19,
+      "away_after_discard": 1,
+      "best_results": [
+        "Basic",
+        "Mixed Shifted"
+      ],
+      "tile": "3s"
+    },
+    "needs_discard": true
+  },
+  "[2222]3p(333)s445m1145z": {
+    "acceptance": {
+      "All Pungs": [
+        "1z",
+        "3p",
+        "4m",
+        "4z",
+        "5m",
+        "5z"
+      ],
+      "All Types": [
+        "1p",
+        "1z",
+        "2p",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "5z",
+        "6m"
+      ],
+      "Basic": [
+        "1p",
+        "1z",
+        "2p",
+        "2z",
+        "3m",
+        "3p",
+        "3z",
+        "4m",
+        "4p",
+        "4z",
+        "5m",
+        "5p",
+        "5z",
+        "6m",
+        "6z",
+        "7m",
+        "7z"
+      ],
+      "First or Last n tiles": [
+        "2p",
+        "3p",
+        "4m"
+      ]
+    },
+    "best_results": [
+      "All Pungs",
+      "All Types",
+      "Basic"
+    ],
+    "closest_away": 3,
+    "discard": {
+      "acceptance": [
+        "1p",
+        "1z",
+        "2p",
+        "3m",
+        "3p",
+        "4m",
+        "4p",
+        "5m",
+        "5p",
+        "5z",
+        "6m",
+        "7m"
+      ],
+      "acceptance_by_type": {
+        "All Pungs": [
+          "1z",
+          "3p",
+          "4m",
+          "5m",
+          "5z"
+        ],
+        "All Types": [
+          "1p",
+          "1z",
+          "2p",
+          "3m",
+          "3p",
+          "4m",
+          "4p",
+          "5z",
+          "6m"
+        ],
+        "Mixed Shifted Pungs": [
+          "1p",
+          "1z",
+          "2p",
+          "3m",
+          "3p",
+          "4m",
+          "4p",
+          "5m",
+          "5p",
+          "5z",
+          "6m",
+          "7m"
+        ],
+        "Three Concealed Pungs": [
+          "1p",
+          "1z",
+          "2p",
+          "3m",
+          "3p",
+          "4m",
+          "4p",
+          "5m",
+          "5p",
+          "5z",
+          "6m",
+          "7m"
+        ]
+      },
+      "acceptance_count": 37,
+      "away_after_discard": 2,
+      "best_results": [
+        "All Pungs",
+        "All Types",
+        "Basic"
+      ],
+      "tile": "4z"
+    },
+    "needs_discard": true
+  }
+}
