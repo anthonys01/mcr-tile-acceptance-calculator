@@ -7,7 +7,7 @@ let pyodide = null;
 
 const PY_FILES = [
   'training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py',
-  'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mcr_scorer.py',
+  'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mahjong_core.py', 'mahjong_hand.py', 'mahjong_context.py', 'mahjong_yaku.py', 'mcr_scorer.py', 'hand_scorer.py',
   'hand_types/__init__.py', 'hand_types/all_pungs.py', 'hand_types/all_types.py', 'hand_types/common.py',
   'hand_types/basic.py', 'hand_types/knitted.py', 'hand_types/precompute.py', 'hand_types/seven_pairs.py',
   'hand_types/three_group_pattern.py'

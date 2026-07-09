@@ -2,8 +2,8 @@ from functools import cache, reduce
 from itertools import product
 
 from group_finder import all_groups_for, find_simple_waits_for_two_tiles
+from hand_scorer import get_best_yakus_for_won_hand
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongGroup, MahjongTile
-from mcr_scorer import get_best_yakus_for_won_hand
 from tiles_utils import parse_hand
 
 

@@ -9,6 +9,7 @@ import json
 import random
 from random import Random
 
+from hand_scorer import get_total_points
 from mahjong_objects import MahjongTile, MahjongHand
 from tiles_utils import generate_tile_pool
 from tile_acceptance_calculator import (
@@ -17,7 +18,7 @@ from tile_acceptance_calculator import (
     get_acceptance_by_hand_type,
     get_tile_to_discard_from,
 )
-from mcr_scorer import get_won_hand_yakus, get_total_points, print_yakus
+from mcr_scorer import get_won_hand_yakus, print_yakus
 
 
 def _hand_from_tiles(tile_strs, drawn=None) -> MahjongHand:
