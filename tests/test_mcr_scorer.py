@@ -68,6 +68,13 @@ SCORER_CASES = {
         (Y.TWO_CONCEALED_PUNGS, 1),
         (Y.SHORT_STRAIGHT, 1),
     ],
+    "2223455!6677778s": [
+        (Y.FULL_FLUSH, 1),
+        (Y.TILE_HOG, 1),
+        (Y.CONCEALED_HAND, 1),
+        (Y.ALL_SIMPLE, 1),
+        (Y.SHORT_STRAIGHT, 1),
+    ],
     "1!99s19p19m1234567z": [
         (Y.THIRTEEN_ORPHANS, 1),
     ],

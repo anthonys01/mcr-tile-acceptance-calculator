@@ -17,6 +17,8 @@ from mahjong_context import (
     take_free_pung_single,
 )
 
+_NINE_GATES_NUMBERS = (1,1,1,2,3,4,5,6,7,8,9,9,9)
+
 # ---------------------------------------------------------------------------
 # Individual check functions
 # ---------------------------------------------------------------------------
@@ -35,7 +37,11 @@ def _check_all_green(h: HandContext) -> bool:
 
 
 def _check_nine_gates(h: HandContext) -> bool:
-    return len(h.acceptance) == 9
+    if len(h.acceptance) < 9 or len(h.families) > 1:
+        return False
+    numbers = list(sorted(t.number for t in h.all_tiles))
+    numbers.remove(h.winning_tile.number)
+    return tuple(numbers) == _NINE_GATES_NUMBERS
 
 
 def _check_four_kongs(h: HandContext) -> bool:
