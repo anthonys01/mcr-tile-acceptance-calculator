@@ -1,9 +1,20 @@
 """
     Pattern generator utilities
 """
+from functools import lru_cache
 from typing import Iterator
 
 from mahjong_objects import Family
+
+
+@lru_cache(maxsize=None)
+def _cached_patterns(input_pattern: str) -> tuple[str, ...]:
+    """Fully expand and memoise a wildcard pattern.
+
+    Patterns (e.g. ``123a456b789c``) are fixed and reused on every hand analysis,
+    so caching the full expansion avoids regenerating them repeatedly.
+    """
+    return tuple(_pattern_generator("", input_pattern, {}, {}))
 
 
 def pattern_generator(input_pattern: str) -> Iterator[str]:
@@ -26,7 +37,7 @@ def pattern_generator(input_pattern: str) -> Iterator[str]:
     :param input_pattern: wildcard pattern
     :return: iterator of strict tile patterns
     """
-    return _pattern_generator("", input_pattern, {}, {})
+    return iter(_cached_patterns(input_pattern))
 
 
 def _pattern_resolve_number_wildcards(parsed, to_parse, family_wildcards, number_wildcards,

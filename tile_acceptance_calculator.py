@@ -369,13 +369,48 @@ def get_acceptance_by_hand_type(results, best_results, acceptance, basic_yakus=N
     return dict(acceptance_by_type)
 
 
-def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind=0):
+_ANALYZE_CACHE: dict = {}
+_ANALYZE_CACHE_MAX = 200_000
+
+
+def _hand_signature(hand: MahjongHand, prevalent_wind, seat_wind, include_basic):
+    """Canonical, hashable identity of a hand for the transposition cache.
+
+    Tiles are interned flyweights, so the sorted tuple is a stable multiset key.
+    """
+    tiles = tuple(sorted(hand.hand_tiles, key=lambda tile: tile.index))
+    return (
+        tiles,
+        frozenset(hand.declared_tiles),
+        frozenset(hand.kongs),
+        prevalent_wind,
+        seat_wind,
+        include_basic,
+    )
+
+
+def clear_analyze_cache() -> None:
+    """Empty the transposition cache (call between independent benchmark runs)."""
+    _ANALYZE_CACHE.clear()
+
+
+def analyze_hand(
+    hand: MahjongHand,
+    hand_types=None,
+    prevalent_wind=0,
+    seat_wind=0,
+    include_basic=True,
+    use_cache=True,
+):
     """
     analyze given mahjong hand for each supported hand type
     :param hand: hand to analyze
     :param hand_types: list all hand types to analyze, if specified
     :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
     :param seat_wind: seat wind (1-4) or 0 if unknown
+    :param include_basic: analyze the (expensive) BASIC hand type; disable for a
+        fast structural-only leaf evaluation (see ``evaluate_hand_fast``)
+    :param use_cache: reuse/populate the transposition cache for full analyses
     :return: a string containing the analysis
     """
     if len(hand.hand_tiles) < hand.get_natural_size():
@@ -383,8 +418,17 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
             f"Not enough tiles. At least {hand.get_natural_size()} are needed for analysis."
         )
 
+    cache_key = None
+    if use_cache and hand_types is None:
+        cache_key = _hand_signature(hand, prevalent_wind, seat_wind, include_basic)
+        cached = _ANALYZE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
     if not hand_types:
-        hand_types = HandType
+        hand_types = list(HandType)
+    if not include_basic:
+        hand_types = [ht for ht in hand_types if ht != HandType.BASIC]
 
     results = {}
     best_results = []
@@ -417,7 +461,29 @@ def analyze_hand(hand: MahjongHand, hand_types=None, prevalent_wind=0, seat_wind
         results[hand_type.value] = hand_results
         acceptance[hand_type.value] = hand_acceptance
 
-    return results, acceptance, best_results, closest_away, basic_yakus
+    result = (results, acceptance, best_results, closest_away, basic_yakus)
+    if cache_key is not None and len(_ANALYZE_CACHE) < _ANALYZE_CACHE_MAX:
+        _ANALYZE_CACHE[cache_key] = result
+    return result
+
+
+def evaluate_hand_fast(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
+    """Cheap leaf evaluation for tree search.
+
+    Skips the BASIC hand type (~80% of the analysis cost, see profiling) and only
+    evaluates the structural MCR hand types. Returns the structural shanten
+    (``nb_away``), the closest hand type labels and their combined tile acceptance.
+
+    :return: (nb_away, best_results, simple_acceptance)
+    """
+    results, acceptance, best_results, nb_away, _ = analyze_hand(
+        hand,
+        prevalent_wind=prevalent_wind,
+        seat_wind=seat_wind,
+        include_basic=False,
+    )
+    simple_acceptance = get_simple_acceptance(results, best_results, acceptance)
+    return nb_away, best_results, simple_acceptance
 
 
 def get_tile_to_discard_from(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
