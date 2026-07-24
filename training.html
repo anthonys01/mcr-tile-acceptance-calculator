@@ -2,14 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCR Discard Trainer</title>
   <style>
+    :root {
+      /* square render size (S) for tiles; content is cropped from 128px PNGs */
+      --tile-s: 72px;
+      --disc-s: 40px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: system-ui, Arial, sans-serif;
       margin: 0;
       padding: 20px;
       background: #0f5132;
       color: #f5f5f5;
+      overflow-x: hidden;
     }
     h1 { margin: 0 0 12px; font-size: 22px; }
     #stats {
@@ -51,18 +59,25 @@
     .tile {
       display: inline-block;
       vertical-align: bottom;
-      width: 46px;
-      height: 72px;
+      width: calc(var(--tile-s) * 82 / 128);
+      height: var(--tile-s);
       background-repeat: no-repeat;
-      background-size: 72px 72px;
-      background-position: -13px 0;
+      background-size: var(--tile-s) var(--tile-s);
+      background-position: calc(var(--tile-s) * -23 / 128) 0;
       border-radius: 4px;
       cursor: pointer;
       transition: transform 0.08s, box-shadow 0.08s;
+      touch-action: manipulation;
     }
-    .tile.clickable:hover {
-      transform: translateY(-10px);
-      box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+    @media (hover: hover) {
+      .tile.clickable:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+      }
+    }
+    .tile.clickable:active {
+      transform: translateY(-8px);
+      box-shadow: 0 5px 9px rgba(0,0,0,0.45);
     }
     .tile.static { cursor: default; }
     .drawn-sep { width: 16px; }
@@ -81,11 +96,11 @@
     }
     .disc {
       display: inline-block;
-      width: 26px;
-      height: 40px;
+      width: calc(var(--disc-s) * 82 / 128);
+      height: var(--disc-s);
       background-repeat: no-repeat;
-      background-size: 40px 40px;
-      background-position: -7px 0;
+      background-size: var(--disc-s) var(--disc-s);
+      background-position: calc(var(--disc-s) * -23 / 128) 0;
       border-radius: 3px;
     }
     .feedback {
@@ -107,7 +122,7 @@
     }
     #wins .win-card.valid { box-shadow: 0 0 0 2px #ffc107; }
     #wins .win-card.invalid { opacity: 0.7; }
-    pre { font-size: 13px; line-height: 1.25; margin: 8px 0 0; }
+    pre { font-size: 13px; line-height: 1.25; margin: 8px 0 0; overflow-x: auto; }
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -168,6 +183,37 @@
     .type-cols { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 4px; }
     .type-col { flex: 1; min-width: 240px; }
     .type-col h4 { margin: 6px 0 2px; font-size: 13px; color: #d7e7d7; }
+
+    /* ---- responsive / mobile ---- */
+    @media (max-width: 600px) {
+      :root { --tile-s: 64px; --disc-s: 34px; }
+      body { padding: 12px; }
+      h1 { font-size: 20px; margin-bottom: 10px; }
+      #stats {
+        gap: 8px 14px;
+        padding: 8px 12px;
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      #stats b { font-size: 16px; }
+      #controls { gap: 8px; }
+      button { padding: 12px 16px; font-size: 15px; }
+      #newGameBtn { flex: 1 1 auto; }
+      #seedInput { flex: 1 1 120px; width: auto; min-width: 0; }
+      .hand-zone {
+        gap: 4px 3px;
+        padding: 12px 8px;
+      }
+      .drawn-sep { width: 10px; }
+      .type-cols { flex-direction: column; gap: 10px; }
+      .type-col { min-width: 0; }
+      .type-name { min-width: 0; }
+    }
+
+    /* keep a full 14-tile hand comfortably tappable on very narrow phones */
+    @media (max-width: 380px) {
+      :root { --tile-s: 58px; }
+    }
   </style>
 </head>
 <body>
