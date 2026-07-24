@@ -1,52 +1,763 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Tile acceptance calculator (Pyodide)</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCR Tile Acceptance Calculator</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #273449;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --gold: #fbbf24;
+      --danger: #f87171;
+      --tile-h: 46px;
+      --tile-sm-h: 30px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 1.15rem; margin: 0; }
+    header .status { font-size: .8rem; color: var(--muted); }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .panel h2 {
+      font-size: .95rem;
+      margin: 0 0 12px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .spacer { flex: 1; }
+
+    /* Tiles — 128x128 PNGs with 23px transparent padding each side (content
+       x: 23..105). Rendered as cropped backgrounds so there is no white box and
+       no extra side spacing: element height = background-size S, width = S*82/128,
+       left offset = -S*23/128. */
+    .tile {
+      display: inline-block;
+      vertical-align: bottom;
+      width: 46px;
+      height: 72px;
+      background-repeat: no-repeat;
+      background-size: 72px 72px;
+      background-position: -13px 0;
+      border-radius: 4px;
+      user-select: none;
+    }
+    .tile.sm {
+      width: 26px;
+      height: 40px;
+      background-size: 40px 40px;
+      background-position: -7px 0;
+      border-radius: 3px;
+    }
+    .tile-btn {
+      border: none; background: none; padding: 0; margin: 0; cursor: pointer;
+      line-height: 0; transition: transform .08s ease;
+    }
+    .tile-btn:hover { transform: translateY(-6px); }
+    .tile-group {
+      display: inline-flex; gap: 0; padding: 3px; border-radius: 8px;
+      background: var(--panel-2); border: 1px solid var(--border);
+    }
+    .tile-group.concealed { border-style: dashed; border-color: var(--gold); }
+    .tile-group.removable { cursor: pointer; }
+    .tile-group.removable:hover { outline: 2px solid var(--danger); }
+    .tiles-wrap { display: flex; gap: 2px; flex-wrap: wrap; align-items: flex-end; }
+
+    /* Palette */
+    .palette-suit { margin-bottom: 8px; }
+    .palette-suit .label { font-size: .7rem; color: var(--muted); margin-bottom: 2px; }
+    .palette-row { display: flex; gap: 0; flex-wrap: wrap; }
+
+    /* Segmented control */
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .seg button {
+      background: var(--panel-2); color: var(--text); border: none; padding: 7px 12px;
+      cursor: pointer; font-size: .82rem; border-right: 1px solid var(--border);
+    }
+    .seg button:last-child { border-right: none; }
+    .seg button.active { background: var(--accent); color: #08131f; font-weight: 600; }
+
+    select, input[type=text] {
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font-size: .9rem;
+    }
+    input[type=text] { min-width: 320px; font-family: ui-monospace, monospace; }
+    label.chk { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; }
+
+    button.primary {
+      background: var(--accent-2); color: #06210f; border: none; border-radius: 8px;
+      padding: 10px 20px; font-weight: 700; font-size: .95rem; cursor: pointer;
+    }
+    button.primary:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost {
+      background: transparent; color: var(--accent); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: .82rem;
+    }
+
+    .hint { font-size: .78rem; color: var(--muted); }
+    .count-badge {
+      font-size: .78rem; color: var(--muted); padding: 3px 8px;
+      border: 1px solid var(--border); border-radius: 999px;
+    }
+    .count-badge.ok { color: var(--accent-2); border-color: var(--accent-2); }
+
+    /* Results */
+    #results { display: grid; gap: 16px; }
+    .empty { color: var(--muted); text-align: center; padding: 30px; }
+    .badge {
+      display: inline-block; font-size: .72rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 999px; background: var(--panel-2); color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .badge.away { background: #1e3a5f; color: var(--accent); }
+    .badge.count { background: #14361f; color: var(--accent-2); border-color: #1f5233; }
+    .badge.win { background: #4a3610; color: var(--gold); border-color: #6b4e17; }
+
+    .discard-card {
+      border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+      background: var(--panel-2);
+    }
+    .discard-card.best { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+    .discard-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .type-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .type-tag {
+      font-size: .7rem; padding: 2px 8px; border-radius: 999px;
+      background: #1e293b; border: 1px solid var(--border); color: var(--muted);
+    }
+    .star { color: var(--gold); font-size: 1rem; }
+
+    details.ht {
+      border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+      overflow: hidden;
+    }
+    details.ht > summary {
+      cursor: pointer; padding: 12px 14px; display: flex; gap: 10px; align-items: center;
+      list-style: none; flex-wrap: wrap;
+    }
+    details.ht > summary::-webkit-details-marker { display: none; }
+    details.ht > summary::before {
+      content: "▶"; font-size: .7rem; color: var(--muted); transition: transform .15s;
+    }
+    details.ht[open] > summary::before { transform: rotate(90deg); }
+    details.ht > summary .ht-name { font-weight: 600; font-size: .95rem; }
+    .ht-body { padding: 4px 14px 14px; display: grid; gap: 12px; }
+    .combo {
+      padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+    }
+    .combo .lbl { font-size: .72rem; color: var(--muted); margin-right: 6px; }
+    .combo-line { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+    details.nested > summary {
+      cursor: pointer; font-size: .8rem; color: var(--accent); list-style: none;
+    }
+    details.nested > summary::-webkit-details-marker { display: none; }
+    table.yaku { border-collapse: collapse; font-size: .8rem; margin-top: 4px; }
+    table.yaku td { border: 1px solid var(--border); padding: 3px 10px; }
+    table.yaku td.pts { text-align: right; color: var(--gold); }
+    table.yaku tr.total td { font-weight: 700; }
+    .sep-note { font-size: .75rem; color: var(--muted); }
+    .error { color: var(--danger); white-space: pre-wrap; font-family: ui-monospace, monospace; }
+    pre#formatTips {
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; font-size: .8rem; color: var(--muted); white-space: pre-wrap;
+    }
+  </style>
 </head>
 <body>
-  <pre id="formatTips" hidden>
-  1-9s = bamboos
-  1-9m = characters
-  1-9p = circles
-  1234z = East - South - West - North
-  567z = White - Green - Red Dragon
-  (234)m = exposed element
-  (4444)z = exposed kong
-  [4444]z = concealed kong
-  Example of valid format: 146(789)m[3333](4444)p14z
-  </pre>
-  <button id="tipsBtn">Format Help</button>
-  <input id="textInput" placeholder="Enter hand" type="text">
-  <button id="calcBtn" disabled>Calculate</button>
-  <br>
-  <label><select id="prevalent_wind">
-    <option value="1">East</option>
-    <option value="2">South</option>
-    <option value="3">West</option>
-    <option value="4">North</option>
-  </select> Prevalent Wind</label>
-  <br>
-  <label><select id="seat_wind">
-    <option value="1">East</option>
-    <option value="2">South</option>
-    <option value="3">West</option>
-    <option value="4">North</option>
-  </select> Seat Wind</label>
-  <br>
-  <label><input id="checkBox" type="checkbox"> Display all results</label>
-  <pre id="result"></pre>
+  <header>
+    <h1>🀄 MCR Tile Acceptance Calculator</h1>
+    <span class="status" id="status">Loading engine…</span>
+  </header>
 
-  <script>
-    const tipsBtn = document.getElementById("tipsBtn");
-    const formatTips = document.getElementById("formatTips");
+  <main>
+    <!-- ===================== INPUT BUILDER ===================== -->
+    <section class="panel">
+      <h2>Build your hand</h2>
 
-    tipsBtn.addEventListener("click", () => {
-      formatTips.hidden = !formatTips.hidden;
-      tipsBtn.textContent = formatTips.hidden ? "Format Help" : "Hide Help";
-    });
-  </script>
+      <div class="row" style="margin-bottom:12px">
+        <span class="hint">Add to:</span>
+        <div class="seg" id="modeSeg">
+          <button data-mode="hand" class="active">Hand tile</button>
+          <button data-mode="chow">Chow (declared)</button>
+          <button data-mode="pung">Pung (declared)</button>
+          <button data-mode="kong">Exposed Kong</button>
+          <button data-mode="ckong">Concealed Kong</button>
+        </div>
+        <span class="hint" id="modeHint">Click a tile to add it to your concealed hand.</span>
+      </div>
+
+      <!-- Tile palette -->
+      <div id="palette"></div>
+
+      <!-- Current hand -->
+      <div style="margin-top:14px">
+        <div class="row" style="margin-bottom:6px">
+          <strong style="font-size:.85rem">Declared groups</strong>
+          <span class="hint">(click a group to remove it)</span>
+        </div>
+        <div class="tiles-wrap" id="declaredView"><span class="hint">none</span></div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div class="row" style="margin-bottom:6px">
+          <strong style="font-size:.85rem">Concealed tiles</strong>
+          <span class="hint">(click a tile to remove it)</span>
+          <span class="spacer"></span>
+          <span class="count-badge" id="tileCount">0 tiles</span>
+        </div>
+        <div class="tiles-wrap" id="concealedView"><span class="hint">none</span></div>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <button class="ghost" id="clearBtn">Clear all</button>
+        <button class="ghost" id="tipsBtn">Notation help</button>
+        <span class="spacer"></span>
+      </div>
+
+      <pre id="formatTips" hidden>1-9s = bamboos
+1-9m = characters
+1-9p = circles
+1234z = East - South - West - North
+567z = White - Green - Red Dragon
+(234)m = exposed chow/pung
+(4444)z = exposed kong
+[4444]z = concealed kong
+Example of valid format: 146(789)m[3333](4444)p14z</pre>
+
+      <div class="row" style="margin-top:12px">
+        <label class="chk" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <span class="hint">Notation (editable — advanced)</span>
+          <input id="textInput" type="text" placeholder="e.g. 146(789)m[3333]p14z">
+        </label>
+      </div>
+    </section>
+
+    <!-- ===================== OPTIONS ===================== -->
+    <section class="panel">
+      <h2>Options</h2>
+      <div class="row">
+        <label class="chk">Prevalent wind
+          <select id="prevalent_wind">
+            <option value="1">East</option>
+            <option value="2">South</option>
+            <option value="3">West</option>
+            <option value="4">North</option>
+          </select>
+        </label>
+        <label class="chk">Seat wind
+          <select id="seat_wind">
+            <option value="1">East</option>
+            <option value="2">South</option>
+            <option value="3">West</option>
+            <option value="4">North</option>
+          </select>
+        </label>
+        <label class="chk"><input id="checkBox" type="checkbox"> Show all hand types (not just closest)</label>
+        <span class="spacer"></span>
+        <button class="primary" id="calcBtn" disabled>Analyze</button>
+      </div>
+      <div class="hint" id="timing" style="margin-top:8px"></div>
+    </section>
+
+    <!-- ===================== RESULTS ===================== -->
+    <section id="results">
+      <div class="empty">Build a hand and press <strong>Analyze</strong>.</div>
+    </section>
+  </main>
+
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
+    // ---------- Tile helpers ----------
+    const SUITS = [
+      { key: "m", label: "Characters (m)", nums: [1,2,3,4,5,6,7,8,9] },
+      { key: "p", label: "Circles (p)",    nums: [1,2,3,4,5,6,7,8,9] },
+      { key: "s", label: "Bamboos (s)",    nums: [1,2,3,4,5,6,7,8,9] },
+      { key: "z", label: "Honors (E S W N / White Green Red)", nums: [1,2,3,4,5,6,7] },
+    ];
+
+    function tileImg(code, opts = {}) {
+      const span = document.createElement("span");
+      span.className = "tile" + (opts.sm ? " sm" : "");
+      span.style.backgroundImage = "url('tiles-png/" + code + ".png')";
+      span.dataset.tile = code;
+      span.title = code;
+      return span;
+    }
+    function tileNum(code) { return parseInt(code[0], 10); }
+    function tileSuit(code) { return code[1]; }
+
+    // ---------- Builder state ----------
+    const state = { concealed: [], declared: [], mode: "hand" };
+
+    const MODE_HINTS = {
+      hand:  "Click a tile to add it to your concealed hand.",
+      chow:  "Click the lowest tile of a run (1–7, no honors) to declare a chow.",
+      pung:  "Click a tile to declare a pung (3 identical).",
+      kong:  "Click a tile to declare an exposed kong (4 identical).",
+      ckong: "Click a tile to declare a concealed kong (4 identical).",
+    };
+
+    function buildPalette() {
+      const root = document.getElementById("palette");
+      root.innerHTML = "";
+      for (const suit of SUITS) {
+        const box = document.createElement("div");
+        box.className = "palette-suit";
+        const lbl = document.createElement("div");
+        lbl.className = "label";
+        lbl.textContent = suit.label;
+        box.appendChild(lbl);
+        const rowEl = document.createElement("div");
+        rowEl.className = "palette-row";
+        for (const n of suit.nums) {
+          const code = n + suit.key;
+          const btn = document.createElement("button");
+          btn.className = "tile-btn";
+          btn.appendChild(tileImg(code));
+          btn.addEventListener("click", () => onPaletteClick(code));
+          rowEl.appendChild(btn);
+        }
+        box.appendChild(rowEl);
+        root.appendChild(box);
+      }
+    }
+
+    function onPaletteClick(code) {
+      const n = tileNum(code), suit = tileSuit(code);
+      switch (state.mode) {
+        case "hand":
+          state.concealed.push(code);
+          break;
+        case "pung":
+          state.declared.push({ kind: "pung", concealed: false, tiles: [code, code, code] });
+          break;
+        case "kong":
+          state.declared.push({ kind: "kong", concealed: false, tiles: [code, code, code, code] });
+          break;
+        case "ckong":
+          state.declared.push({ kind: "kong", concealed: true, tiles: [code, code, code, code] });
+          break;
+        case "chow":
+          if (suit === "z" || n > 7) { flashHint("Chow must start at 1–7 in a number suit."); return; }
+          state.declared.push({
+            kind: "chow", concealed: false,
+            tiles: [n + suit, (n + 1) + suit, (n + 2) + suit],
+          });
+          break;
+      }
+      syncFromState();
+    }
+
+    function flashHint(msg) {
+      const el = document.getElementById("modeHint");
+      const prev = el.textContent;
+      el.textContent = msg;
+      el.style.color = "var(--danger)";
+      setTimeout(() => { el.textContent = prev; el.style.color = ""; }, 2200);
+    }
+
+    function renderConcealed() {
+      const view = document.getElementById("concealedView");
+      view.innerHTML = "";
+      const sorted = [...state.concealed].sort(tileCompare);
+      if (!sorted.length) { view.innerHTML = '<span class="hint">none</span>'; return; }
+      for (const code of sorted) {
+        const btn = document.createElement("button");
+        btn.className = "tile-btn";
+        btn.appendChild(tileImg(code));
+        btn.title = "Remove " + code;
+        btn.addEventListener("click", () => {
+          const idx = state.concealed.indexOf(code);
+          if (idx >= 0) state.concealed.splice(idx, 1);
+          syncFromState();
+        });
+        view.appendChild(btn);
+      }
+    }
+
+    function renderDeclared() {
+      const view = document.getElementById("declaredView");
+      view.innerHTML = "";
+      if (!state.declared.length) { view.innerHTML = '<span class="hint">none</span>'; return; }
+      state.declared.forEach((g, i) => {
+        const grp = document.createElement("div");
+        grp.className = "tile-group removable" + (g.concealed ? " concealed" : "");
+        grp.title = (g.concealed ? "Concealed kong — " : g.kind + " — ") + "click to remove";
+        for (const code of g.tiles) grp.appendChild(tileImg(code, { sm: true }));
+        grp.addEventListener("click", () => { state.declared.splice(i, 1); syncFromState(); });
+        view.appendChild(grp);
+      });
+    }
+
+    const SUIT_ORDER = { m: 0, p: 1, s: 2, z: 3 };
+    function tileCompare(a, b) {
+      const sa = SUIT_ORDER[tileSuit(a)], sb = SUIT_ORDER[tileSuit(b)];
+      return sa !== sb ? sa - sb : tileNum(a) - tileNum(b);
+    }
+
+    function buildNotation() {
+      let out = "";
+      for (const key of ["m", "p", "s", "z"]) {
+        let part = "";
+        const groups = state.declared
+          .filter(g => tileSuit(g.tiles[0]) === key)
+          .sort((a, b) => tileNum(a.tiles[0]) - tileNum(b.tiles[0]));
+        for (const g of groups) {
+          const nums = g.tiles.map(t => tileNum(t)).join("");
+          part += g.concealed ? `[${nums}]` : `(${nums})`;
+        }
+        const loose = state.concealed
+          .filter(t => tileSuit(t) === key)
+          .map(tileNum).sort((a, b) => a - b);
+        part += loose.join("");
+        if (part) out += part + key;
+      }
+      return out;
+    }
+
+    function totalTiles() {
+      let n = state.concealed.length;
+      for (const g of state.declared) n += g.tiles.length;
+      return n;
+    }
+
+    function updateCount() {
+      const kongs = state.declared.filter(g => g.tiles.length === 4).length;
+      const natural = 13 + kongs;
+      const n = totalTiles();
+      const el = document.getElementById("tileCount");
+      el.textContent = `${n} tiles (need ${natural} to analyze, ${natural + 1} to find a discard)`;
+      el.classList.toggle("ok", n === natural || n === natural + 1);
+    }
+
+    function syncFromState() {
+      renderConcealed();
+      renderDeclared();
+      document.getElementById("textInput").value = buildNotation();
+      updateCount();
+    }
+
+    // ---------- Mode segmented control ----------
+    document.getElementById("modeSeg").addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      state.mode = btn.dataset.mode;
+      [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("modeHint").textContent = MODE_HINTS[state.mode];
+      document.getElementById("modeHint").style.color = "";
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      state.concealed = []; state.declared = [];
+      syncFromState();
+    });
+
+    document.getElementById("tipsBtn").addEventListener("click", () => {
+      const tips = document.getElementById("formatTips");
+      tips.hidden = !tips.hidden;
+    });
+
+    // ---------- Results rendering ----------
+    function tilesRow(codes, opts = {}) {
+      const wrap = document.createElement("div");
+      wrap.className = "tiles-wrap";
+      if (!codes.length) { wrap.innerHTML = '<span class="hint">—</span>'; return wrap; }
+      for (const c of [...codes].sort(tileCompare)) wrap.appendChild(tileImg(c, opts));
+      return wrap;
+    }
+
+    function groupsRow(groups, opts = {}) {
+      const wrap = document.createElement("div");
+      wrap.className = "tiles-wrap";
+      for (const g of groups) {
+        const grp = document.createElement("div");
+        grp.className = "tile-group";
+        for (const c of g) grp.appendChild(tileImg(c, opts));
+        wrap.appendChild(grp);
+      }
+      return wrap;
+    }
+
+    function typeTags(labels) {
+      const wrap = document.createElement("div");
+      wrap.className = "type-tags";
+      for (const l of labels) {
+        const t = document.createElement("span");
+        t.className = "type-tag";
+        t.textContent = l;
+        wrap.appendChild(t);
+      }
+      return wrap;
+    }
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    function renderDiscards(data) {
+      const panel = el("section", "panel");
+      panel.appendChild(el("h2", null, "Discard choices (best → worst)"));
+      if (!data.discards.length) {
+        panel.appendChild(el("div", "hint", "No discard candidate found."));
+        return panel;
+      }
+      const grid = el("div", null);
+      grid.style.display = "grid";
+      grid.style.gap = "10px";
+      for (const d of data.discards) {
+        const card = el("div", "discard-card" + (d.recommended ? " best" : ""));
+        const head = el("div", "discard-head");
+        head.appendChild(tileImg(d.tile));
+        const meta = el("div");
+        const line1 = el("div", "row");
+        if (d.recommended) {
+          const star = el("span", "star", "★");
+          star.title = "Recommended discard";
+          line1.appendChild(star);
+        }
+        line1.appendChild(el("span", "badge count", d.acceptance_count + " tiles accepted"));
+        line1.appendChild(el("span", "badge", d.acceptance.length + " kinds"));
+        meta.appendChild(line1);
+        meta.appendChild(typeTags(Object.keys(d.by_type)));
+        head.appendChild(meta);
+        card.appendChild(head);
+
+        const det = el("details", "nested");
+        det.style.marginTop = "8px";
+        det.appendChild(el("summary", null, "Show accepted tiles"));
+        const body = el("div");
+        body.style.marginTop = "6px";
+        for (const [label, tiles] of Object.entries(d.by_type)) {
+          const block = el("div");
+          block.style.marginBottom = "6px";
+          block.appendChild(el("span", "type-tag", label));
+          block.appendChild(tilesRow(tiles, { sm: true }));
+          body.appendChild(block);
+        }
+        det.appendChild(body);
+        card.appendChild(det);
+        grid.appendChild(card);
+      }
+      panel.appendChild(grid);
+      return panel;
+    }
+
+    function renderFullAcceptance(data) {
+      const panel = el("section", "panel");
+      panel.appendChild(el("h2", null, "Full acceptance"));
+      const head = el("div", "row");
+      head.appendChild(el("span", "badge count", data.full_acceptance_count + " tiles"));
+      head.appendChild(el("span", "badge", data.full_acceptance.length + " kinds"));
+      panel.appendChild(head);
+      const wrap = el("div");
+      wrap.style.marginTop = "8px";
+      wrap.appendChild(tilesRow(data.full_acceptance, { sm: true }));
+      panel.appendChild(wrap);
+      return panel;
+    }
+
+    function renderYakuTable(combo) {
+      const table = el("table", "yaku");
+      for (const y of combo.yakus) {
+        const tr = el("tr");
+        tr.appendChild(el("td", null, y.count > 1 ? `${y.name} ×${y.count}` : y.name));
+        tr.appendChild(el("td", "pts", String(y.points * y.count)));
+        table.appendChild(tr);
+      }
+      const tr = el("tr", "total");
+      tr.appendChild(el("td", null, "Total"));
+      tr.appendChild(el("td", "pts", String(combo.total_points)));
+      table.appendChild(tr);
+      return table;
+    }
+
+    function renderHandType(ht, openByDefault) {
+      const det = el("details", "ht");
+      if (openByDefault) det.open = true;
+      const sum = el("summary");
+      sum.appendChild(el("span", "ht-name", ht.name));
+      sum.appendChild(el("span", "badge away", ht.away + " away"));
+      sum.appendChild(el("span", "badge count", ht.acceptance_count + " tiles"));
+      sum.appendChild(el("span", "badge", ht.result_count + " shape" + (ht.result_count > 1 ? "s" : "")));
+      det.appendChild(sum);
+
+      const body = el("div", "ht-body");
+
+      const accBlock = el("div");
+      accBlock.appendChild(el("div", "lbl", "Accepts:"));
+      accBlock.appendChild(tilesRow(ht.acceptance, { sm: true }));
+      body.appendChild(accBlock);
+
+      const combosDet = el("details", "nested");
+      combosDet.appendChild(el("summary", null,
+        `Show hand shapes (${ht.combos.length}${ht.truncated ? " of many" : ""})`));
+      const combosWrap = el("div");
+      combosWrap.style.marginTop = "8px";
+      combosWrap.style.display = "grid";
+      combosWrap.style.gap = "8px";
+      for (const combo of ht.combos) {
+        const c = el("div", "combo");
+        const line = el("div", "combo-line");
+        line.appendChild(el("span", "lbl", "Groups"));
+        line.appendChild(groupsRow(combo.groups, { sm: true }));
+        if (combo.residue && combo.residue.length) {
+          line.appendChild(el("span", "lbl", "Left"));
+          line.appendChild(tilesRow(combo.residue, { sm: true }));
+        }
+        c.appendChild(line);
+        if (combo.yakus) {
+          const badge = el("span", "badge win", combo.total_points + " pts");
+          c.appendChild(badge);
+          c.appendChild(renderYakuTable(combo));
+        }
+        combosWrap.appendChild(c);
+      }
+      combosDet.appendChild(combosWrap);
+      body.appendChild(combosDet);
+
+      if (ht.truncated) {
+        body.appendChild(el("div", "sep-note",
+          "Only the most relevant shapes are shown."));
+      }
+      det.appendChild(body);
+      return det;
+    }
+
+    function renderResults(data) {
+      const root = document.getElementById("results");
+      root.innerHTML = "";
+
+      // Summary panel
+      const summary = el("section", "panel");
+      summary.appendChild(el("h2", null, "Analyzed hand"));
+      const hrow = el("div", "row");
+      const decl = data.declared.map(g => g.tiles);
+      if (decl.length) hrow.appendChild(groupsRow(decl));
+      hrow.appendChild(tilesRow(data.concealed));
+      summary.appendChild(hrow);
+      const info = el("div", "row");
+      info.style.marginTop = "8px";
+      const awayTxt = data.needs_discard
+        ? `${data.away_after_discard} away after best discard`
+        : `${data.closest_away} away`;
+      info.appendChild(el("span", "badge away", awayTxt));
+      info.appendChild(el("span", "hint", "Notation: " + data.hand));
+      summary.appendChild(info);
+      root.appendChild(summary);
+
+      // Discards or full acceptance
+      if (data.needs_discard) root.appendChild(renderDiscards(data));
+      else root.appendChild(renderFullAcceptance(data));
+
+      // Hand types
+      const htPanel = el("section", "panel");
+      htPanel.appendChild(el("h2", null, "Hand types" + (data.hand_types.length ? "" : " — none close")));
+      const grid = el("div");
+      grid.style.display = "grid";
+      grid.style.gap = "10px";
+      data.hand_types.forEach((ht, i) => grid.appendChild(renderHandType(ht, i === 0)));
+      htPanel.appendChild(grid);
+      root.appendChild(htPanel);
+    }
+
+    function renderNotice(title, msg, kind) {
+      const root = document.getElementById("results");
+      root.innerHTML = "";
+      const panel = el("section", "panel");
+      panel.appendChild(el("h2", null, title));
+      const p = el("div", kind === "error" ? "error" : null, msg);
+      if (kind !== "error") p.style.color = "var(--muted)";
+      panel.appendChild(p);
+      root.appendChild(panel);
+    }
+
+    function renderError(rawMsg) {
+      const root = document.getElementById("results");
+      root.innerHTML = "";
+      const panel = el("section", "panel");
+      panel.appendChild(el("h2", null, "Couldn't analyze this hand"));
+      panel.appendChild(el("div", null, friendlyError(rawMsg)));
+      const det = el("details", "nested");
+      det.style.marginTop = "8px";
+      det.appendChild(el("summary", null, "Technical details"));
+      det.appendChild(el("div", "error", rawMsg));
+      panel.appendChild(det);
+      root.appendChild(panel);
+    }
+
+    function friendlyError(raw) {
+      const known = /(?:AttributeError|ValueError|Exception):\s*([^\n]+)/.exec(raw);
+      let msg = known ? known[1].trim() : raw.split("\n").filter(Boolean).pop() || raw;
+      const map = [
+        [/Not enough tiles/i, msg + " Add more tiles to your hand."],
+        [/Unknown character/i, "That notation contains an unsupported character. Use digits 1-9 with a suit letter (m/p/s/z), and ( ) [ ] for declared groups."],
+        [/family denomination/i, "Each block of numbers must be followed by a suit letter (m, p, s or z)."],
+        [/Declared group must be 3 or 4/i, "A declared group must have 3 tiles (chow/pung) or 4 (kong)."],
+        [/Concealed kong must be 4 identical/i, "A concealed kong must be 4 identical tiles, e.g. [3333]."],
+        [/Exposed kong must be 4 identical/i, "An exposed kong must be 4 identical tiles, e.g. (3333)."],
+      ];
+      for (const [re, friendly] of map) if (re.test(msg)) return friendly;
+      return msg;
+    }
+
+    // Count tiles / kongs straight from the notation so validation also works
+    // when the user typed notation manually (bypassing the builder state).
+    function validateNotation(s) {
+      const digits = (s.match(/\d/g) || []).length;
+      let kongs = 0;
+      for (const g of (s.match(/[([]\d+[)\]]/g) || [])) {
+        if ((g.match(/\d/g) || []).length === 4) kongs++;
+      }
+      const natural = 13 + kongs;
+      if (digits === 0) return "Build or type a hand first.";
+      if (digits < natural) {
+        return `Your hand has only ${digits} tile${digits === 1 ? "" : "s"}. ` +
+          `A complete hand needs ${natural}${kongs ? ` (13 + ${kongs} kong)` : ""} tiles — ` +
+          `add ${natural - digits} more.`;
+      }
+      if (digits > natural + 1) {
+        return `Your hand has ${digits} tiles, which is too many. ` +
+          `Use ${natural} tiles to see acceptance, or ${natural + 1} to pick a discard.`;
+      }
+      return null;
+    }
+
+    // ---------- Pyodide ----------
     async function init() {
       const pyodide = await loadPyodide();
       const pyFiles = ['tile_acceptance_calculator.py','tiles_utils.py', 'acceptance.py',
@@ -65,29 +776,47 @@
       await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')");
       window.pyodide = pyodide;
       document.getElementById('calcBtn').disabled = false;
+      document.getElementById('status').textContent = "Engine ready.";
     }
-    init();
 
-    async function sendData() {
-      const input = document.getElementById("textInput").value;
-      const checkbox = document.getElementById("checkBox").checked;
-      const prevalent_wind = Number(document.getElementById("prevalent_wind").value);
-      const seat_wind = Number(document.getElementById("seat_wind").value);
-      const startTime = performance.now();
+    async function analyze() {
+      const input = document.getElementById("textInput").value.trim();
+      if (!input) { renderNotice("Nothing to analyze", "Build a hand with the tiles above, or type notation.", "notice"); return; }
+      const problem = validateNotation(input);
+      if (problem) { renderNotice("Check your hand", problem, "notice"); return; }
+      const displayAll = document.getElementById("checkBox").checked;
+      const prevalent = Number(document.getElementById("prevalent_wind").value);
+      const seat = Number(document.getElementById("seat_wind").value);
+      const timing = document.getElementById("timing");
+      timing.textContent = "Analyzing…";
+      const start = performance.now();
       try {
         pyodide.globals.set("user_input", input);
-        pyodide.globals.set("display_all", checkbox);
-        pyodide.globals.set("prevalent_wind", prevalent_wind);
-        pyodide.globals.set("seat_wind", seat_wind);
-        const result = await pyodide.runPythonAsync(`from tile_acceptance_calculator import analyze_hand_from_string_and_print\nresult = analyze_hand_from_string_and_print(user_input, display_all, prevalent_wind, seat_wind)\nresult`);
-        const endTime = performance.now();
-        const duration = ((endTime - startTime)/1000).toFixed(2);
-        document.getElementById("result").innerText = `Analysis took ${duration} seconds\n\n${result}`;
+        pyodide.globals.set("display_all", displayAll);
+        pyodide.globals.set("prevalent_wind", prevalent);
+        pyodide.globals.set("seat_wind", seat);
+        const json = await pyodide.runPythonAsync(
+          "from tile_acceptance_calculator import analyze_hand_structured_json\n" +
+          "analyze_hand_structured_json(user_input, display_all, prevalent_wind, seat_wind)"
+        );
+        const data = JSON.parse(json);
+        const secs = ((performance.now() - start) / 1000).toFixed(2);
+        renderResults(data);
+        timing.textContent = `Analysis took ${secs} seconds.`;
       } catch (err) {
-        document.getElementById("result").innerText = "Error: " + err;
+        renderError(String(err));
+        timing.textContent = "";
       }
     }
-    document.getElementById('calcBtn').addEventListener('click', sendData);
+
+    document.getElementById("calcBtn").addEventListener("click", analyze);
+    document.getElementById("textInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !document.getElementById("calcBtn").disabled) analyze();
+    });
+
+    buildPalette();
+    syncFromState();
+    init();
   </script>
 </body>
 </html>

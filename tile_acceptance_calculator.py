@@ -1,6 +1,7 @@
 """
 Tile Acceptance calculator
 """
+import json
 from collections import defaultdict
 from enum import Enum
 from typing import Iterable
@@ -264,9 +265,16 @@ def _basic_combo_label(yakus, best_results):
     return _yaku_display_name(main_yaku)
 
 
-def _get_best_discard_choice(
+def _build_discard_candidates(
     best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
 ):
+    """Compute, for every discardable tile, the union of accepted tiles it keeps.
+
+    Returns three mappings keyed by the candidate discard tile:
+      * ``candidate_acceptance``: union of useful acceptance tiles across types
+      * ``candidate_acceptance_by_type``: same, split per displayed hand-type label
+      * ``candidate_type_occurrence``: set of hand types the tile appears in
+    """
     # tile -> set union des acceptances de tous les types où elle est dans le résidu
     candidate_acceptance: dict[MahjongTile, set] = defaultdict(set)
     candidate_acceptance_by_type: dict[MahjongTile, dict] = defaultdict(
@@ -302,6 +310,16 @@ def _get_best_discard_choice(
                 if label is not None:
                     candidate_acceptance_by_type[tile][label].update(useful_acceptance)
 
+    return candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence
+
+
+def _get_best_discard_choice(
+    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+):
+    candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
+        _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
+    )
+
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
 
@@ -321,6 +339,54 @@ def _get_best_discard_choice(
         best_score,
         dict(candidate_acceptance_by_type[to_discard]),
     )
+
+
+def get_discard_choices(
+    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+):
+    """Rank every discardable tile from best (most acceptance) to worst.
+
+    Each entry is ``(tile, acceptance_set, acceptance_count, acceptance_by_type,
+    is_recommended)``. The recommended flag marks the single tile that
+    ``_get_best_discard_choice`` would pick (top score, useless-tile tiebreak).
+    """
+    candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
+        _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
+    )
+
+    if not candidate_acceptance:
+        raise ValueError("No tile to discard")
+
+    best_score = max(
+        _get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values()
+    )
+    best_tiles = [
+        tile
+        for tile, acc in candidate_acceptance.items()
+        if _get_acceptance_tile_number(hand, acc) == best_score
+    ]
+    recommended = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
+
+    ranked = sorted(
+        candidate_acceptance,
+        key=lambda tile: (
+            -_get_acceptance_tile_number(hand, candidate_acceptance[tile]),
+            tile.index,
+        ),
+    )
+    choices = []
+    for tile in ranked:
+        acc = candidate_acceptance[tile]
+        choices.append(
+            (
+                tile,
+                acc,
+                _get_acceptance_tile_number(hand, acc),
+                dict(candidate_acceptance_by_type[tile]),
+                tile is recommended,
+            )
+        )
+    return choices
 
 
 def get_simple_acceptance(results, best_results, acceptance):
@@ -564,8 +630,162 @@ def _print_hand_analysis(
     return printed_result
 
 
+def _select_combo_indices(best_groups):
+    """Mirror the truncation logic of ``_print_result`` and return the indices
+    of the combinations to display, plus whether the list was truncated.
+    """
+    if len(best_groups) < 10:
+        return list(range(len(best_groups))), False
+    lone_tile_groups_nb = 10
+    selected: list[int] = []
+    for index, (groups, _residue) in enumerate(best_groups):
+        lone_tile_groups = sum(1 for group in groups if len(group) <= 1)
+        if lone_tile_groups > lone_tile_groups_nb:
+            continue
+        if lone_tile_groups < lone_tile_groups_nb:
+            selected.clear()
+            lone_tile_groups_nb = lone_tile_groups
+        selected.append(index)
+    return selected[:10], True
+
+
+def _yakus_to_list(yakus):
+    rows = sorted(
+        ((_yaku_display_name(yaku), yaku.get_points(), count) for yaku, count in yakus),
+        key=lambda row: (-row[1] * row[2], row[0]),
+    )
+    return [{"name": name, "points": points, "count": count} for name, points, count in rows]
+
+
+def _combo_to_dict(combi, residue, yaku_info=None):
+    combo = {
+        "groups": [[str(tile) for tile in group] for group in combi],
+        "residue": sorted(str(tile) for tile in residue),
+    }
+    if yaku_info is not None:
+        _won_hand, yakus = yaku_info
+        combo["yakus"] = _yakus_to_list(yakus)
+        combo["total_points"] = sum(row["points"] * row["count"] for row in combo["yakus"])
+    return combo
+
+
+def _hand_type_to_dict(name, best_groups, hand, acceptance_tiles, basic_yakus=None):
+    indices, truncated = _select_combo_indices(best_groups)
+    combos = []
+    for index in indices:
+        combi, residue = best_groups[index]
+        yaku_info = None
+        if name == HandType.BASIC.value and basic_yakus:
+            yaku_info = basic_yakus[index]
+        combos.append(_combo_to_dict(combi, residue, yaku_info))
+    return {
+        "name": name,
+        "away": len(best_groups[0][1]),
+        "result_count": len(best_groups),
+        "truncated": truncated,
+        "combos": combos,
+        "acceptance": sorted(str(tile) for tile in acceptance_tiles),
+        "acceptance_count": _get_acceptance_tile_number(hand, acceptance_tiles),
+    }
+
+
+def _declared_groups_to_list(hand: MahjongHand):
+    declared = []
+    for group in hand.declared_tiles:
+        tiles = sorted(group)
+        if len(tiles) == 4:
+            kind = "kong"
+        elif len(set(tiles)) == 1:
+            kind = "pung"
+        else:
+            kind = "chow"
+        declared.append(
+            {"tiles": [str(tile) for tile in tiles], "kind": kind, "concealed": False}
+        )
+    for group in hand.kongs:
+        if group in hand.declared_tiles:
+            continue
+        tiles = sorted(group)
+        declared.append(
+            {"tiles": [str(tile) for tile in tiles], "kind": "kong", "concealed": True}
+        )
+    declared.sort(key=lambda entry: entry["tiles"][0])
+    return declared
+
+
+def analyze_hand_structured(
+    hand_str: str, display_all=False, prevalent_wind=0, seat_wind=0
+) -> dict:
+    """Analyze a hand and return a JSON-serialisable structured description.
+
+    Unlike ``analyze_hand_from_string_and_print`` (which returns a formatted
+    text blob), this returns machine-readable data so a rich UI can render
+    tiles, collapsible hand-type breakdowns and a ranked list of discards.
+    Tiles are exposed as their short string (e.g. ``"1m"``, ``"5z"``).
+    """
+    hand = parse_hand(hand_str)
+    results, acceptance, best_results, closest_away, basic_yakus = analyze_hand(
+        hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
+    )
+
+    data = {
+        "hand": str(hand),
+        "concealed": [str(tile) for tile in sorted(hand.get_free_tiles())],
+        "declared": _declared_groups_to_list(hand),
+        "needs_discard": hand.needs_to_discard(),
+        "closest_away": closest_away,
+        "best_results": list(best_results),
+    }
+
+    if hand.needs_to_discard():
+        try:
+            choices = get_discard_choices(
+                best_results, results, acceptance, hand, basic_yakus
+            )
+        except ValueError:
+            choices = []
+        data["discards"] = [
+            {
+                "tile": str(tile),
+                "acceptance": sorted(str(accepted) for accepted in acc),
+                "acceptance_count": count,
+                "recommended": recommended,
+                "by_type": {
+                    label: sorted(str(accepted) for accepted in tiles)
+                    for label, tiles in by_type.items()
+                },
+            }
+            for tile, acc, count, by_type, recommended in choices
+        ]
+        data["away_after_discard"] = max(closest_away - 1, 0)
+    else:
+        full_acceptance = get_simple_acceptance(results, best_results, acceptance)
+        data["full_acceptance"] = sorted(str(tile) for tile in full_acceptance)
+        data["full_acceptance_count"] = _get_acceptance_tile_number(
+            hand, full_acceptance
+        )
+
+    to_display = list(results.keys()) if display_all else list(best_results)
+    to_display = sorted(to_display, key=lambda hand_type: len(results[hand_type][0][1]))
+    data["hand_types"] = [
+        _hand_type_to_dict(
+            hand_type, results[hand_type], hand, acceptance[hand_type], basic_yakus
+        )
+        for hand_type in to_display
+    ]
+    return data
+
+
+def analyze_hand_structured_json(
+    hand_str: str, display_all=False, prevalent_wind=0, seat_wind=0
+) -> str:
+    """JSON-string wrapper around ``analyze_hand_structured`` for the web UI."""
+    return json.dumps(
+        analyze_hand_structured(hand_str, display_all, prevalent_wind, seat_wind)
+    )
+
+
 if __name__ == "__main__":
-    # print(analyze_hand_from_string_and_print("(123)45678m(222)334p"))
     # print(analyze_hand_from_string_and_print("(111)44778m(222)334p"))
     # print(analyze_hand_from_string_and_print("(123)m(234)s334p(111)55z"))
     # print(analyze_hand_from_string_and_print("147m289s346p12347z"))
