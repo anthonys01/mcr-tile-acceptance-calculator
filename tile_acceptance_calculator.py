@@ -651,7 +651,7 @@ def _select_combo_indices(best_groups):
 
 def _yakus_to_list(yakus):
     rows = sorted(
-        ((_yaku_display_name(yaku), yaku.get_points(), count) for yaku, count in yakus),
+        ((_yaku_display_name(yaku), yaku.get_points(), int(count)) for yaku, count in yakus),
         key=lambda row: (-row[1] * row[2], row[0]),
     )
     return [{"name": name, "points": points, "count": count} for name, points, count in rows]
@@ -663,7 +663,8 @@ def _combo_to_dict(combi, residue, yaku_info=None):
         "residue": sorted(str(tile) for tile in residue),
     }
     if yaku_info is not None:
-        _won_hand, yakus = yaku_info
+        won_hand, yakus = yaku_info
+        combo["complete"] = [[str(tile) for tile in group] for group in won_hand]
         combo["yakus"] = _yakus_to_list(yakus)
         combo["total_points"] = sum(row["points"] * row["count"] for row in combo["yakus"])
     return combo
