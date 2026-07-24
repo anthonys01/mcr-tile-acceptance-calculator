@@ -282,8 +282,10 @@
     let reqId = 0;
     const pending = {};
 
+    // keep version in sync with training_worker.js APP_VERSION for cache-busting
+    const APP_VERSION = "2026-07-24-1";
     function initEngine() {
-      worker = new Worker('training_worker.js', { type: 'module' });
+      worker = new Worker('training_worker.js?v=' + APP_VERSION, { type: 'module' });
       worker.onmessage = (event) => {
         const msg = event.data;
         if (msg.type === 'ready') {

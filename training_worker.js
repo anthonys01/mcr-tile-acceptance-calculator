@@ -5,6 +5,10 @@ import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyod
 
 let pyodide = null;
 
+// Bump on every release so browsers re-fetch the Python sources instead of
+// serving stale cached copies. Keep in sync with training.html's worker URL.
+const APP_VERSION = "2026-07-24-1";
+
 const PY_FILES = [
   'training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py',
   'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mahjong_core.py', 'mahjong_hand.py', 'mahjong_context.py', 'mahjong_yaku.py', 'mcr_scorer.py', 'hand_scorer.py',
@@ -19,7 +23,7 @@ async function init() {
     if (f.includes('/')) {
       try { pyodide.FS.mkdirTree('/home/pyodide/' + f.substring(0, f.lastIndexOf('/'))); } catch (e) {}
     }
-    const resp = await fetch('./' + f);
+    const resp = await fetch('./' + f + '?v=' + APP_VERSION, { cache: 'no-cache' });
     pyodide.FS.writeFile('/home/pyodide/' + f, await resp.text());
   }
   await pyodide.runPythonAsync("import sys\nsys.path.append('/home/pyodide')\nimport training_engine");
