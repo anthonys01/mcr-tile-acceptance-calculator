@@ -317,9 +317,11 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         </label>
         <label class="chk"><input id="checkBox" type="checkbox"> Show all hand types (not just closest)</label>
         <span class="spacer"></span>
+        <button class="ghost" id="shareBtn" disabled>🔗 Share</button>
         <button class="primary" id="calcBtn" disabled>Analyze</button>
       </div>
       <div class="hint" id="timing" style="margin-top:8px"></div>
+      <div class="hint" id="shareMsg" style="margin-top:6px"></div>
     </section>
 
     <!-- ===================== RESULTS ===================== -->
@@ -794,6 +796,94 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
       return null;
     }
 
+    // ---------- URL sharing ----------
+    // The whole analysis runs locally, so a shareable link just carries the
+    // hand notation (plus winds / display-all) as query params.
+    function parseNotationToState(str) {
+      const concealed = [], declared = [];
+      let looseNums = [], pendingGroups = [], cur = null;
+      for (const ch of str) {
+        if (ch >= "1" && ch <= "9") {
+          if (cur) cur.nums.push(ch); else looseNums.push(ch);
+        } else if ("mpsz".includes(ch)) {
+          for (const g of pendingGroups) {
+            const tiles = g.nums.map(n => n + ch);
+            let kind;
+            if (tiles.length === 4) kind = "kong";
+            else if (new Set(g.nums).size === 1) kind = "pung";
+            else kind = "chow";
+            declared.push({ kind, concealed: g.concealed, tiles });
+          }
+          for (const n of looseNums) concealed.push(n + ch);
+          pendingGroups = []; looseNums = [];
+        } else if (ch === "(") { cur = { nums: [], concealed: false }; }
+        else if (ch === "[") { cur = { nums: [], concealed: true }; }
+        else if (ch === ")" || ch === "]") {
+          if (!cur) throw new Error("Unbalanced group");
+          pendingGroups.push(cur); cur = null;
+        } else if (ch === "!" || ch === " ") { /* winning-tile marker / spacing */ }
+        else throw new Error("Unknown character " + ch);
+      }
+      if (cur || looseNums.length || pendingGroups.length) throw new Error("Incomplete notation");
+      return { concealed, declared };
+    }
+
+    function buildShareUrl() {
+      const url = new URL(window.location.href);
+      const p = new URLSearchParams();
+      const hand = document.getElementById("textInput").value.trim();
+      if (hand) p.set("hand", hand);
+      const pw = document.getElementById("prevalent_wind").value;
+      const sw = document.getElementById("seat_wind").value;
+      if (pw !== "1") p.set("pw", pw);
+      if (sw !== "1") p.set("sw", sw);
+      if (document.getElementById("checkBox").checked) p.set("all", "1");
+      url.search = p.toString();
+      url.hash = "";
+      return url.toString();
+    }
+
+    function syncAddressBar() {
+      try { history.replaceState(null, "", buildShareUrl()); } catch (e) {}
+    }
+
+    async function share() {
+      const url = buildShareUrl();
+      const msg = document.getElementById("shareMsg");
+      syncAddressBar();
+      try {
+        await navigator.clipboard.writeText(url);
+        msg.textContent = "🔗 Link copied to clipboard!";
+        msg.style.color = "var(--accent-2)";
+      } catch (e) {
+        msg.style.color = "";
+        msg.textContent = "Copy this link: " + url;
+      }
+      setTimeout(() => {
+        if (msg.textContent.startsWith("🔗")) { msg.textContent = ""; msg.style.color = ""; }
+      }, 4000);
+    }
+
+    function applyUrlParams() {
+      const p = new URLSearchParams(window.location.search);
+      const hand = p.get("hand") || p.get("h");
+      const pw = p.get("pw"), sw = p.get("sw"), all = p.get("all");
+      if (pw && /^[1-4]$/.test(pw)) document.getElementById("prevalent_wind").value = pw;
+      if (sw && /^[1-4]$/.test(sw)) document.getElementById("seat_wind").value = sw;
+      if (all === "1" || all === "true") document.getElementById("checkBox").checked = true;
+      if (!hand) return false;
+      document.getElementById("textInput").value = hand.trim();
+      try {
+        const st = parseNotationToState(hand.trim());
+        state.concealed = st.concealed;
+        state.declared = st.declared;
+        renderConcealed();
+        renderDeclared();
+        updateCount();
+      } catch (e) { /* keep raw notation; analysis will report any real error */ }
+      return true;
+    }
+
     // ---------- Pyodide ----------
     async function init() {
       const pyodide = await loadPyodide();
@@ -840,6 +930,7 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         const secs = ((performance.now() - start) / 1000).toFixed(2);
         renderResults(data);
         timing.textContent = `Analysis took ${secs} seconds.`;
+        syncAddressBar();
       } catch (err) {
         renderError(String(err));
         timing.textContent = "";
@@ -847,13 +938,21 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
     }
 
     document.getElementById("calcBtn").addEventListener("click", analyze);
+    document.getElementById("shareBtn").addEventListener("click", share);
     document.getElementById("textInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !document.getElementById("calcBtn").disabled) analyze();
     });
 
     buildPalette();
-    syncFromState();
-    init();
+    const hasSharedHand = applyUrlParams();
+    if (!hasSharedHand) syncFromState();
+    document.getElementById("shareBtn").disabled = false;
+    init().then(() => {
+      if (hasSharedHand) analyze();
+    });
   </script>
+  <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
+    Website by Anthonys01 &mdash; Tiles from <a href="https://martinpersson.org/" style="color:#888;">Martin Persson</a>
+  </footer>
 </body>
 </html>
