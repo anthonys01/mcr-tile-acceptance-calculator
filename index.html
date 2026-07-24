@@ -332,6 +332,8 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
 
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
+    // Bump on every release so browsers fetch fresh Python sources (see init()).
+    const APP_VERSION = "2026-07-24-1";
     // ---------- Tile helpers ----------
     const SUITS = [
       { key: "m", label: "Characters (m)", nums: [1,2,3,4,5,6,7,8,9] },
@@ -892,11 +894,15 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         'hand_types/__init__.py','hand_types/all_pungs.py','hand_types/all_types.py','hand_types/common.py','hand_types/basic.py',
         'hand_types/knitted.py','hand_types/precompute.py','hand_types/seven_pairs.py','hand_types/three_group_pattern.py'];
       const base = './';
+      // Cache-busting: browsers (notably Firefox) may serve a stale cached copy
+      // of the .py sources, causing "cannot import name ..." when index.html has
+      // been updated but the Python files have not. Bumping APP_VERSION on every
+      // release forces a fresh URL, and cache:'no-store' bypasses the HTTP cache.
       for (const f of pyFiles) {
         if (f.includes('/')) {
           try { pyodide.FS.mkdirTree('/home/pyodide/' + f.substring(0, f.lastIndexOf('/'))); } catch(e) {}
         }
-        const resp = await fetch(base + f);
+        const resp = await fetch(base + f + '?v=' + APP_VERSION, { cache: 'no-cache' });
         const text = await resp.text();
         pyodide.FS.writeFile('/home/pyodide/' + f, text);
       }
