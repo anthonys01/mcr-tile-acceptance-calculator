@@ -389,26 +389,48 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
       }
     }
 
+    function tileCount(code) {
+      let c = state.concealed.filter(t => t === code).length;
+      for (const g of state.declared) c += g.tiles.filter(t => t === code).length;
+      return c;
+    }
+
+    function canAdd(additions) {
+      for (const code in additions) {
+        if (tileCount(code) + additions[code] > 4) {
+          flashHint(`Only 4 copies of ${code} are allowed (mahjong rule).`);
+          return false;
+        }
+      }
+      return true;
+    }
+
     function onPaletteClick(code) {
       const n = tileNum(code), suit = tileSuit(code);
       switch (state.mode) {
         case "hand":
+          if (!canAdd({ [code]: 1 })) return;
           state.concealed.push(code);
           break;
         case "pung":
+          if (!canAdd({ [code]: 3 })) return;
           state.declared.push({ kind: "pung", concealed: false, tiles: [code, code, code] });
           break;
         case "kong":
+          if (!canAdd({ [code]: 4 })) return;
           state.declared.push({ kind: "kong", concealed: false, tiles: [code, code, code, code] });
           break;
         case "ckong":
+          if (!canAdd({ [code]: 4 })) return;
           state.declared.push({ kind: "kong", concealed: true, tiles: [code, code, code, code] });
           break;
         case "chow":
           if (suit === "z" || n > 7) { flashHint("Chow must start at 1–7 in a number suit."); return; }
+          const chowTiles = [n + suit, (n + 1) + suit, (n + 2) + suit];
+          if (!canAdd({ [chowTiles[0]]: 1, [chowTiles[1]]: 1, [chowTiles[2]]: 1 })) return;
           state.declared.push({
             kind: "chow", concealed: false,
-            tiles: [n + suit, (n + 1) + suit, (n + 2) + suit],
+            tiles: chowTiles,
           });
           break;
       }
