@@ -398,7 +398,7 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
     function canAdd(additions) {
       for (const code in additions) {
         if (tileCount(code) + additions[code] > 4) {
-          flashHint(`Only 4 copies of ${code} are allowed (mahjong rule).`);
+          flashHint(`Only 4 copies of ${code} are allowed.`);
           return false;
         }
       }
