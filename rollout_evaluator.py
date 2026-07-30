@@ -27,6 +27,7 @@ import os
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 from random import Random
 
 from mahjong_objects import MahjongHand, MahjongTile
@@ -130,12 +131,17 @@ def _wall_from_unseen(unseen_counts, rng: Random) -> list:
     return wall
 
 
-def _fast_shanten(counts) -> int:
-    """Shanten over the cheap shapes only (standard / seven pairs / kokushi /
-    honors-knitted). The costly knitted *straight* is deliberately excluded - it
-    dominates ``ukeire`` cost and is likewise omitted from ``_terminally_complete``,
-    so rollouts never assemble one; keeping it here would only slow every turn."""
-    return min(
+_TERMINALS_HONORS = (0, 8, 9, 17, 18, 26, 27, 28, 29, 30, 31, 32, 33)
+
+
+@lru_cache(maxsize=None)
+def _fast_shapes(counts_t):
+    """(standard, seven_pairs, kokushi, honors_knitted) shanten - memoized.
+
+    Excludes the costly knitted *straight* (see ``_terminally_complete``); rollouts
+    never assemble one, so keeping it would only slow every turn."""
+    counts = list(counts_t)
+    return (
         standard_shanten(counts),
         seven_pairs_shanten(counts),
         kokushi_shanten(counts),
@@ -143,23 +149,66 @@ def _fast_shanten(counts) -> int:
     )
 
 
-def _fast_ukeire(counts):
-    """(shanten, {advancing_tile: unseen_copies}) over the cheap shapes."""
-    cur = _fast_shanten(counts)
-    advancing = {}
+def _fast_shanten(counts) -> int:
+    """Minimum shanten over the cheap shapes (memoized)."""
+    return min(_fast_shapes(tuple(counts)))
+
+
+def _standard_relevant(counts) -> set:
+    """Superset of tiles whose addition can reduce *standard*-shape shanten: any
+    present tile (forms a pair/triplet) and every same-suit neighbour within 2 of a
+    present tile (forms/extends a run). Tiles outside this set are provably useless
+    to the standard shape, so probing them is skipped with no loss of accuracy."""
+    rel = set()
     for idx in range(34):
+        if counts[idx] == 0:
+            continue
+        rel.add(idx)
+        if idx < 27:
+            num = idx % 9
+            base = idx - num
+            for dn in (num - 2, num - 1, num + 1, num + 2):
+                if 0 <= dn <= 8:
+                    rel.add(base + dn)
+    return rel
+
+
+def _fast_ukeire(counts):
+    """(shanten, {advancing_tile: unseen_copies}) over the cheap shapes.
+
+    Only tiles that can advance a shape *currently at the minimum shanten* are
+    probed - an exact reduction of the naive all-34 scan (a tile can lower the min
+    only by dropping a shape that is already at the min). Falls back to the full
+    scan for the rare kokushi/honors-knitted-governed hands."""
+    std, sp, ko, hk = _fast_shapes(tuple(counts))
+    cur = min(std, sp, ko, hk)
+    if ko == cur or hk == cur:
+        candidates = range(34)  # rare in rollouts; stay exact without extra bookkeeping
+    else:
+        candidates = set()
+        if std == cur:
+            candidates |= _standard_relevant(counts)
+        if sp == cur:
+            candidates |= {i for i in range(34) if counts[i] == 1}  # 7 pairs: pair a single
+    advancing = {}
+    for idx in candidates:
         if counts[idx] >= 4:
             continue
         counts[idx] += 1
-        if _fast_shanten(counts) < cur:
+        if min(_fast_shapes(tuple(counts))) < cur:
             advancing[idx] = 4 - (counts[idx] - 1)
         counts[idx] -= 1
     return cur, advancing
 
 
+@lru_cache(maxsize=None)
+def _fast_acceptance_cached(counts_t) -> int:
+    return sum(_fast_ukeire(list(counts_t))[1].values())
+
+
 def _fast_acceptance(counts) -> int:
-    """Total unseen tiles that reduce shanten (breadth), cheap shapes only."""
-    return sum(_fast_ukeire(counts)[1].values())
+    """Total unseen tiles that reduce shanten (breadth), cheap shapes only (memoized)."""
+    return _fast_acceptance_cached(tuple(counts))
 
 
 def _connected(counts14, t) -> bool:
@@ -192,12 +241,17 @@ def _keeping_improves_acceptance(counts14, drawn, s13, acc13) -> bool:
     ``d`` yields a 13-hand with the same shanten but strictly greater acceptance.
     Returns ``True`` as soon as such a ``d`` is found (Type B); ``False`` means the
     draw is useless (Type C) and can be discarded without the costly value policy.
+
+    Only *distinct* discard candidates that keep shanten at ``s13`` are scored, and
+    the acceptance is memoized, so the scan stays cheap.
     """
     if not _connected(counts14, drawn):
         return False
+    seen = set()
     for d in range(34):
-        if counts14[d] == 0 or d == drawn:
+        if counts14[d] == 0 or d == drawn or d in seen:
             continue  # discarding the draw itself is the tsumogiri baseline
+        seen.add(d)
         counts14[d] -= 1
         try:
             if _fast_shanten(counts14) == s13 and _fast_acceptance(counts14) > acc13:
@@ -656,7 +710,8 @@ def _demo() -> None:
 def _test() -> None:
     hand = parse_hand('13m35679s24567p55z')
     choices = parse_tiles('6s2p7p3s')
-    stats = evaluate_discard_choices_adaptive(hand, choices=choices, budget=22, initial_rollouts=30, max_rollouts=150)
+    stats = evaluate_discard_choices_adaptive(hand, choices=choices, budget=22,
+                                              initial_rollouts=30, max_rollouts=150, target_prob=0.8)
     print_choice_stats(stats)
 
 
