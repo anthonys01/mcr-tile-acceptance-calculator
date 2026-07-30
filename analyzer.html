@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCR Discard Rollout Analyzer</title>
+  <style>
+    :root { --tile-s: 56px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      margin: 0; padding: 20px; background: #0f5132; color: #f5f5f5;
+      overflow-x: hidden;
+    }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    .sub { color: #cfe9cf; font-size: 14px; margin-bottom: 16px; }
+    .panel {
+      background: #114d2c; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px;
+    }
+    label { font-size: 13px; color: #d7e7d7; display: block; margin-bottom: 4px; }
+    input[type=text], input[type=number], select {
+      font-size: 15px; padding: 8px 10px; border: none; border-radius: 6px;
+      background: #f5f5f5; color: #222;
+    }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; }
+    .field.grow { flex: 1 1 260px; }
+    .field input[type=text] { width: 100%; }
+    .field.small input { width: 90px; }
+    button {
+      font-size: 15px; padding: 10px 18px; border: none; border-radius: 6px;
+      background: #ffc107; color: #222; cursor: pointer; font-weight: 600;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: #2f6f4a; color: #f5f5f5; }
+    .hand-preview { display: flex; align-items: flex-end; gap: 2px; flex-wrap: wrap; min-height: 60px; margin-top: 6px; }
+    .tile {
+      display: inline-block; width: calc(var(--tile-s) * 82 / 128); height: var(--tile-s);
+      background-repeat: no-repeat; background-size: var(--tile-s) var(--tile-s);
+      background-position: calc(var(--tile-s) * -23 / 128) 0; border-radius: 4px;
+    }
+    #status { min-height: 22px; margin: 12px 0; font-size: 15px; }
+    .prog-wrap { background: rgba(0,0,0,0.25); border-radius: 6px; height: 14px; overflow: hidden; margin: 8px 0; display: none; }
+    .prog-bar { background: #ffc107; height: 100%; width: 0%; transition: width 0.2s; }
+    .engines { font-size: 12px; color: #cfe9cf; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 14px; }
+    th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.12); }
+    th:first-child, td:first-child { text-align: left; }
+    thead th { color: #ffe08a; font-size: 13px; }
+    tbody tr.best { background: rgba(255,193,7,0.14); }
+    tbody tr.best td:first-child { font-weight: 700; }
+    .disc-cell { display: flex; align-items: center; gap: 8px; }
+    .ci { color: #cfe9cf; font-size: 12px; }
+    .note { margin-top: 12px; font-size: 13px; color: #ffe08a; }
+    .spinner::after {
+      content: ''; display: inline-block; width: 12px; height: 12px; margin-left: 8px;
+      vertical-align: -1px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #ffc107;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px; }
+    @media (max-width: 600px) {
+      :root { --tile-s: 46px; }
+      body { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>MCR Discard Rollout Analyzer</h1>
+  <div class="sub">
+    Estimates each candidate discard's chance of reaching a legal (&ge;8-point) MCR win
+    by Monte-Carlo rollouts &mdash; running entirely on <b>your</b> hardware across
+    <span id="coreCount">?</span> parallel engines.
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div class="field grow">
+        <label for="handInput">14-tile hand (e.g. <code>13m35679s24567p55z</code>)</label>
+        <input id="handInput" type="text" value="13m35679s24567p55z" spellcheck="false" autocapitalize="off">
+      </div>
+      <div class="field grow">
+        <label for="choicesInput">Candidate discards (optional shortlist, e.g. <code>6s2p7p3s</code>)</label>
+        <input id="choicesInput" type="text" value="6s2p7p3s" spellcheck="false" autocapitalize="off">
+      </div>
+    </div>
+    <div class="hand-preview" id="handPreview"></div>
+    <div class="row" style="margin-top:12px">
+      <div class="field small">
+        <label for="rolloutsInput">Rollouts / choice</label>
+        <input id="rolloutsInput" type="number" min="10" max="1000" step="10" value="120">
+      </div>
+      <div class="field small">
+        <label for="budgetInput">Draw budget</label>
+        <input id="budgetInput" type="number" min="6" max="40" step="1" value="22">
+      </div>
+      <div class="field small">
+        <label for="prevalentWind">Round wind</label>
+        <select id="prevalentWind">
+          <option value="0">None</option><option value="1">East</option>
+          <option value="2">South</option><option value="3">West</option><option value="4">North</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label for="seatWind">Seat wind</label>
+        <select id="seatWind">
+          <option value="0">None</option><option value="1">East</option>
+          <option value="2">South</option><option value="3">West</option><option value="4">North</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label for="seedInput">Seed</label>
+        <input id="seedInput" type="number" min="0" step="1" value="12648430">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="runBtn" disabled>Loading engines…</button>
+      </div>
+    </div>
+    <div class="engines" id="engineStatus"></div>
+  </div>
+
+  <div id="status"></div>
+  <div class="prog-wrap" id="progWrap"><div class="prog-bar" id="progBar"></div></div>
+
+  <div id="results"></div>
+
+  <script>
+    const FAMILY_OFFSET = { m: 0, p: 9, s: 18, z: 27 };
+    function tileEl(t) {
+      return `<span class="tile" style="background-image:url('tiles-png/${t}.png')"></span>`;
+    }
+    // Parse a hand string (ignoring declared-group brackets) into a sorted list of
+    // tile strings, purely for the visual preview.
+    function parseHandPreview(str) {
+      const tiles = [];
+      let nums = [];
+      for (const ch of str) {
+        if (ch >= '1' && ch <= '9') nums.push(ch);
+        else if ('mpsz'.includes(ch)) { nums.forEach(n => tiles.push(n + ch)); nums = []; }
+      }
+      const idx = t => FAMILY_OFFSET[t[1]] + (parseInt(t[0], 10) - 1);
+      return tiles.sort((a, b) => idx(a) - idx(b));
+    }
+    function renderPreview() {
+      const tiles = parseHandPreview(document.getElementById('handInput').value);
+      document.getElementById('handPreview').innerHTML = tiles.map(tileEl).join('');
+    }
+    document.getElementById('handInput').addEventListener('input', renderPreview);
+    renderPreview();
+
+    // ---------- worker pool ----------
+    const APP_VERSION = "2026-07-30-1";
+    const POOL_SIZE = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 16));
+    document.getElementById('coreCount').textContent = POOL_SIZE;
+
+    const workers = [];
+    let readyCount = 0;
+    let reqId = 0;
+    const pending = {};   // id -> {resolve, reject}
+
+    function makeWorker() {
+      const w = new Worker('rollout_worker.js?v=' + APP_VERSION, { type: 'module' });
+      w.onmessage = (event) => {
+        const msg = event.data;
+        if (msg.type === 'ready') {
+          readyCount++;
+          updateEngineStatus();
+          if (readyCount === POOL_SIZE) {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = false; btn.textContent = 'Analyze';
+            setStatus('Engines ready. Click <b>Analyze</b>.');
+          }
+          return;
+        }
+        if (msg.type === 'fatal') { setStatus('Engine failed to load: ' + msg.error); return; }
+        const cb = pending[msg.id];
+        if (!cb) return;
+        delete pending[msg.id];
+        if (msg.type === 'error') cb.reject(new Error(msg.error));
+        else cb.resolve(msg.result);
+      };
+      w.onerror = (e) => setStatus('Engine error: ' + e.message);
+      return w;
+    }
+    function pyCall(worker, fn, ...args) {
+      return new Promise((resolve, reject) => {
+        const id = ++reqId;
+        pending[id] = { resolve, reject };
+        worker.postMessage({ id, fn, args });
+      });
+    }
+    for (let i = 0; i < POOL_SIZE; i++) workers.push(makeWorker());
+
+    function updateEngineStatus() {
+      document.getElementById('engineStatus').textContent =
+        `${readyCount}/${POOL_SIZE} engines ready`;
+    }
+    function setStatus(html) { document.getElementById('status').innerHTML = html; }
+
+    // ---------- orchestration ----------
+    let running = false;
+
+    async function analyze() {
+      if (running) return;
+      running = true;
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      document.getElementById('results').innerHTML = '';
+
+      const hand = document.getElementById('handInput').value.trim();
+      const choices = document.getElementById('choicesInput').value.trim();
+      const rollouts = parseInt(document.getElementById('rolloutsInput').value, 10) || 120;
+      const budget = parseInt(document.getElementById('budgetInput').value, 10) || 22;
+      const pw = parseInt(document.getElementById('prevalentWind').value, 10) || 0;
+      const sw = parseInt(document.getElementById('seatWind').value, 10) || 0;
+      const seed = parseInt(document.getElementById('seedInput').value, 10) || 0;
+
+      let ctxJson;
+      try {
+        setStatus('<span class="spinner">Preparing</span>');
+        ctxJson = await pyCall(workers[0], 'prepare', hand, choices, rollouts, budget, pw, sw, 'greedy', seed);
+      } catch (err) {
+        setStatus('Error: ' + err.message);
+        running = false; btn.disabled = false;
+        return;
+      }
+      const ctx = JSON.parse(ctxJson);
+      const nChoices = ctx.choices.length;
+      if (nChoices === 0) {
+        setStatus('No candidate discards found.');
+        running = false; btn.disabled = false;
+        return;
+      }
+
+      // Build the flat (choice, rollout) task list. Interleave by rollout index so
+      // early chunks touch every choice (nicer progressive feedback); the dynamic
+      // queue below handles the wide per-rollout cost variance.
+      const tasks = [];
+      for (let r = 0; r < rollouts; r++)
+        for (let ci = 0; ci < nChoices; ci++) tasks.push([ci, r]);
+      const total = tasks.length;
+
+      // Small chunks => good load balancing across the pool (mirrors chunksize=1).
+      const CHUNK = Math.max(1, Math.min(4, Math.ceil(total / (POOL_SIZE * 8))));
+      const chunks = [];
+      for (let i = 0; i < tasks.length; i += CHUNK) chunks.push(tasks.slice(i, i + CHUNK));
+
+      const results = [];
+      let done = 0, nextChunk = 0;
+      const t0 = performance.now();
+      document.getElementById('progWrap').style.display = 'block';
+
+      function updateProgress() {
+        const pct = total ? (done / total * 100) : 100;
+        document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
+        const elapsed = (performance.now() - t0) / 1000;
+        const rate = done > 0 ? elapsed / done : 0;
+        const eta = rate * (total - done);
+        setStatus(`<span class="spinner">Running rollouts</span> &mdash; `
+          + `${done}/${total} (${pct.toFixed(0)}%), ~${eta.toFixed(0)}s left`);
+      }
+      updateProgress();
+
+      // Dynamic work queue: whenever a worker finishes a chunk, feed it the next.
+      async function pump(worker) {
+        while (nextChunk < chunks.length) {
+          const chunk = chunks[nextChunk++];
+          const raw = await pyCall(worker, 'run_chunk', ctxJson, JSON.stringify(chunk));
+          const rows = JSON.parse(raw);
+          for (const row of rows) results.push(row);
+          done += chunk.length;
+          updateProgress();
+        }
+      }
+
+      try {
+        await Promise.all(workers.map(w => pump(w)));
+        setStatus('<span class="spinner">Aggregating</span>');
+        const tableJson = await pyCall(workers[0], 'aggregate', ctxJson, JSON.stringify(results));
+        const table = JSON.parse(tableJson);
+        const secs = ((performance.now() - t0) / 1000).toFixed(1);
+        renderResults(table, ctx, secs);
+        setStatus(`Done in ${secs}s (${total} rollouts across ${POOL_SIZE} engines).`);
+      } catch (err) {
+        setStatus('Error during rollouts: ' + err.message);
+      } finally {
+        document.getElementById('progWrap').style.display = 'none';
+        running = false;
+        btn.disabled = false;
+      }
+    }
+
+    function pctFmt(x) { return (x * 100).toFixed(1) + '%'; }
+    function renderResults(table, ctx, secs) {
+      if (!table.length) { document.getElementById('results').innerHTML = ''; return; }
+      let html = `<table><thead><tr>`
+        + `<th>discard</th><th>win%</th><th>95% CI</th><th>P(best)</th>`
+        + `<th>avg pts</th><th>avg turns</th><th>EV</th></tr></thead><tbody>`;
+      table.forEach((s, i) => {
+        const ci = `${(s.ci_low * 100).toFixed(0)}&ndash;${(s.ci_high * 100).toFixed(0)}%`;
+        const pts = s.avg_points != null ? s.avg_points.toFixed(1) : '&ndash;';
+        const trn = s.avg_turns_to_win != null ? s.avg_turns_to_win.toFixed(1) : '&ndash;';
+        html += `<tr class="${i === 0 ? 'best' : ''}">`
+          + `<td><div class="disc-cell">${tileEl(s.tile)}<span>${s.tile}</span></div></td>`
+          + `<td>${pctFmt(s.win_rate)}</td>`
+          + `<td class="ci">${ci}</td>`
+          + `<td>${(s.prob_best * 100).toFixed(0)}%</td>`
+          + `<td>${pts}</td><td>${trn}</td><td>${s.ev.toFixed(2)}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+
+      const top = table[0], second = table[1];
+      if (top.prob_best >= 0.90) {
+        html += `<div class="note">Confident pick: <b>discard ${top.tile}</b> `
+          + `(P(best)=${(top.prob_best * 100).toFixed(0)}%).</div>`;
+      } else if (second) {
+        html += `<div class="note">Top choice <b>${top.tile}</b> is only `
+          + `P(best)=${(top.prob_best * 100).toFixed(0)}% (next: ${second.tile} at `
+          + `${(second.prob_best * 100).toFixed(0)}%). Increase rollouts for a confident pick.</div>`;
+      }
+      document.getElementById('results').innerHTML = html;
+    }
+
+    document.getElementById('runBtn').addEventListener('click', analyze);
+  </script>
+  <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
+    Website by Anthonys01 &mdash; Tiles from <a href="https://martinpersson.org/" style="color:#888;">Martin Persson</a>
+  </footer>
+</body>
+</html>
