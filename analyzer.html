@@ -107,6 +107,10 @@
         <label for="targetInput">Target P(best) %</label>
         <input id="targetInput" type="number" min="50" max="99" step="1" value="90">
       </div>
+      <div class="field small" id="batchField">
+        <label for="batchInput" title="Rollouts added per adaptive wave. Defaults to your core count.">Batch / wave</label>
+        <input id="batchInput" type="number" min="1" max="500" step="1">
+      </div>
       <div class="field small">
         <label for="budgetInput">Draw budget</label>
         <input id="budgetInput" type="number" min="6" max="40" step="1" value="22">
@@ -132,6 +136,10 @@
       <div class="field">
         <label>&nbsp;</label>
         <button id="runBtn" disabled>Loading engines…</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="stopBtn" class="secondary" style="display:none">Stop</button>
       </div>
     </div>
     <div class="engines" id="engineStatus"></div>
@@ -170,6 +178,10 @@
     const APP_VERSION = "2026-07-31-1";
     const POOL_SIZE = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 16));
     document.getElementById('coreCount').textContent = POOL_SIZE;
+    // Default the adaptive wave size to the core count (POOL_SIZE) so each wave
+    // hands roughly one fresh rollout column per engine; user can override.
+    document.getElementById('batchInput').value = POOL_SIZE;
+    document.getElementById('batchInput').placeholder = POOL_SIZE;
 
     const workers = [];
     let readyCount = 0;
@@ -220,6 +232,7 @@
     function syncMode() {
       const adaptive = modeInput.value === 'adaptive';
       document.getElementById('targetField').style.display = adaptive ? '' : 'none';
+      document.getElementById('batchField').style.display = adaptive ? '' : 'none';
       document.getElementById('rolloutsLabel').textContent =
         adaptive ? 'Max rollouts / choice' : 'Rollouts / choice';
     }
@@ -241,12 +254,16 @@
 
     // ---------- orchestration (adaptive wave loop, streamed live) ----------
     let running = false;
+    let cancelRequested = false;
 
     async function analyze() {
       if (running) return;
       running = true;
+      cancelRequested = false;
       const btn = document.getElementById('runBtn');
+      const stopBtn = document.getElementById('stopBtn');
       btn.disabled = true;
+      stopBtn.style.display = ''; stopBtn.disabled = false; stopBtn.textContent = 'Stop';
       document.getElementById('results').innerHTML = '';
 
       const hand = document.getElementById('handInput').value.trim();
@@ -268,6 +285,7 @@
       } catch (err) {
         setStatus('Error: ' + err.message);
         running = false; btn.disabled = false;
+        stopBtn.style.display = 'none';
         return;
       }
       const ctx = JSON.parse(ctxJson);
@@ -275,13 +293,18 @@
       if (nChoices === 0) {
         setStatus('No candidate discards found.');
         running = false; btn.disabled = false;
+        stopBtn.style.display = 'none';
         return;
       }
 
       // Wave parameters (mirror evaluate_discard_choices_adaptive). Fixed mode is
       // just a single wave of `maxRollouts` with early-stop/pruning disabled.
       const INIT = adaptive ? Math.min(24, maxRollouts) : maxRollouts;
-      const BATCH = 12;
+      // Batch (rollouts added per adaptive wave) defaults to the core count so each
+      // wave scales with the user's hardware; overridable via the Batch field.
+      const BATCH = adaptive
+        ? Math.max(1, parseInt(document.getElementById('batchInput').value, 10) || POOL_SIZE)
+        : maxRollouts;
       const TARGET = adaptive ? target : 2;   // 2 = unreachable => never early-stop
       const PRUNE = adaptive;
 
@@ -358,9 +381,10 @@
           updateProgress();
 
           // Dynamic work queue: feed each worker the next chunk as it frees up, and
-          // stream the provisional table as results arrive.
+          // stream the provisional table as results arrive. Stops pulling new chunks
+          // once the user requests cancellation (in-flight chunks still settle).
           async function pump(worker) {
-            while (nextChunk < chunks.length) {
+            while (nextChunk < chunks.length && !cancelRequested) {
               const chunk = chunks[nextChunk++];
               const rows = JSON.parse(await pyCall(worker, 'run_chunk', ctxJson, JSON.stringify(chunk)));
               for (const [ci, r, won, turns, points] of rows) {
@@ -374,6 +398,19 @@
             }
           }
           await Promise.all(workers.map(pump));
+
+          // Cancelled mid-wave: drop this wave's partial (ragged) columns so the
+          // final stats rest only on fully-sampled columns [0, done), then finalize.
+          if (cancelRequested) {
+            const kept = results.filter(([, r]) => r < done);
+            results.length = 0; results.push(...kept);
+            nBy.fill(0); winsBy.fill(0); ptsBy.fill(0); trnBy.fill(0);
+            for (const [ci, r, won, turns, points] of results) {
+              nBy[ci] += 1;
+              if (won) { winsBy[ci] += 1; ptsBy[ci] += points; trnBy[ci] += turns; }
+            }
+            break;
+          }
           done += want;
 
           // Authoritative wave-boundary stats from Python (paired bootstrap over the
@@ -408,15 +445,34 @@
           wave += 1;
         }
 
+        // After a mid-run stop, refresh the authoritative P(best) so the final table
+        // is consistent with the committed columns [0, done) (skipped if nothing
+        // completed, or on a normal finish which already aggregated at the boundary).
+        if (cancelRequested && done > 0) {
+          const finalActive = Array.from(active).sort((a, b) => a - b);
+          const agg = JSON.parse(await pyCall(workers[0], 'aggregate_adaptive', ctxJson,
+            JSON.stringify(results), JSON.stringify(finalActive), JSON.stringify(nBy), done));
+          probBestBy = new Array(nChoices).fill(0);
+          for (const row of agg.table) probBestBy[row.pos] = row.prob_best;
+        }
+
         const secs = ((performance.now() - t0) / 1000).toFixed(1);
         renderLive(true);
-        setStatus(`Done in ${secs}s &mdash; ${done} rollouts / active choice across ${POOL_SIZE} engines.`);
+        if (cancelRequested) {
+          setStatus(`Stopped after ${secs}s &mdash; ${done} completed rollouts / active choice`
+            + (done > 0 ? '' : ' (no full rollout finished)')
+            + ` across ${POOL_SIZE} engines.`);
+        } else {
+          setStatus(`Done in ${secs}s &mdash; ${done} rollouts / active choice across ${POOL_SIZE} engines.`);
+        }
       } catch (err) {
         setStatus('Error during rollouts: ' + err.message);
       } finally {
         document.getElementById('progWrap').style.display = 'none';
         running = false;
+        cancelRequested = false;
         btn.disabled = false;
+        document.getElementById('stopBtn').style.display = 'none';
       }
     }
 
@@ -462,6 +518,13 @@
     }
 
     document.getElementById('runBtn').addEventListener('click', analyze);
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      if (!running) return;
+      cancelRequested = true;
+      const stopBtn = document.getElementById('stopBtn');
+      stopBtn.disabled = true; stopBtn.textContent = 'Stopping…';
+      setStatus('<span class="spinner">Stopping</span> &mdash; finishing in-flight rollouts&hellip;');
+    });
   </script>
   <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
     Website by Anthonys01 &mdash; Tiles from <a href="https://martinpersson.org/" style="color:#888;">Martin Persson</a>
