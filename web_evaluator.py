@@ -191,3 +191,89 @@ def aggregate(ctx_json: str, results_json: str) -> str:
         for s in stats
     ]
     return json.dumps(table)
+
+
+def aggregate_adaptive(
+    ctx_json: str,
+    results_json: str,
+    active_json: str,
+    n_by_choice_json: str,
+    done: int,
+) -> str:
+    """Wave-boundary aggregate for the adaptive (auto-stop) web loop.
+
+    Mirrors :func:`rollout_evaluator.evaluate_discard_choices_adaptive`'s per-wave
+    step so the browser ranking is identical to the desktop adaptive run:
+
+    * ``P(best)`` is a paired bootstrap over the **active** choices on the shared
+      columns ``[0, done)`` (Common Random Numbers make column ``r`` the same wall
+      for every choice, so the pairing is valid).
+    * pruned (inactive) choices keep their frozen tallies and are shown with
+      ``prob_best = 0`` and ``active = False`` so the UI can grey them out.
+
+    :param active_json: JSON list of currently-active choice positions (0-based).
+    :param n_by_choice_json: JSON list (indexed by choice position) of how many
+        rollouts each choice has been sampled (``done`` for active, frozen for
+        pruned) - drives each choice's win-rate / Wilson-CI denominator.
+    :param done: number of shared rollout columns sampled for the active choices.
+    :return: JSON ``{"table": [...], "done": done}`` where each row also carries its
+        choice ``pos`` and ``active`` flag for the JS orchestrator.
+    """
+    ctx = json.loads(ctx_json)
+    results = json.loads(results_json)
+    active = json.loads(active_json)
+    n_by_choice_list = json.loads(n_by_choice_json)
+    done = int(done)
+    choices_meta = ctx["choices"]
+    n_choices = len(choices_meta)
+    maxroll = ctx["rollouts"]
+    base_seed = ctx["base_seed"]
+
+    win_matrix = [[0] * maxroll for _ in range(n_choices)]
+    wins = {ci: 0 for ci in range(n_choices)}
+    points_sum = {ci: 0 for ci in range(n_choices)}
+    turns_sum = {ci: 0 for ci in range(n_choices)}
+    for ci, r, won, turns, points in results:
+        if won:
+            win_matrix[ci][r] = 1
+            wins[ci] += 1
+            points_sum[ci] += points
+            turns_sum[ci] += turns
+
+    active_ids = sorted(active)
+    active_matrix = [[win_matrix[ci][r] for r in range(done)] for ci in active_ids]
+    active_prob = _prob_best_bootstrap(
+        active_matrix, resamples=BOOTSTRAP_RESAMPLES, seed=base_seed
+    )
+    prob_best = [0.0] * n_choices
+    for k, ci in enumerate(active_ids):
+        prob_best[ci] = active_prob[k]
+
+    n_by_choice = {ci: int(n_by_choice_list[ci]) for ci in range(n_choices)}
+    choices_tiles = [_INDEX_TO_TILE[c["index"]] for c in choices_meta]
+    stats = _build_stats(
+        choices_tiles, wins, points_sum, turns_sum, n_by_choice, prob_best
+    )
+
+    tileidx_to_pos = {c["index"]: pos for pos, c in enumerate(choices_meta)}
+    active_set = set(active_ids)
+    table = []
+    for s in stats:
+        pos = tileidx_to_pos[s.tile.index]
+        table.append(
+            {
+                "pos": pos,
+                "tile": str(s.tile),
+                "rollouts": s.rollouts,
+                "wins": s.wins,
+                "win_rate": s.win_rate,
+                "ci_low": s.ci_low,
+                "ci_high": s.ci_high,
+                "prob_best": s.prob_best,
+                "avg_points": s.avg_points,
+                "avg_turns_to_win": s.avg_turns_to_win,
+                "ev": s.ev,
+                "active": pos in active_set,
+            }
+        )
+    return json.dumps({"table": table, "done": done})

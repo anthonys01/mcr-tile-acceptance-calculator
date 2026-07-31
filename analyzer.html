@@ -49,6 +49,12 @@
     thead th { color: #ffe08a; font-size: 13px; }
     tbody tr.best { background: rgba(255,193,7,0.14); }
     tbody tr.best td:first-child { font-weight: 700; }
+    tbody tr.pruned { opacity: 0.42; }
+    tbody tr.pruned td:first-child::after {
+      content: 'out'; font-size: 10px; font-weight: 700; color: #f0a; margin-left: 6px;
+      background: rgba(255,0,170,0.15); padding: 1px 5px; border-radius: 8px; vertical-align: 1px;
+    }
+    td.prov { color: #a8c9b3; }
     .disc-cell { display: flex; align-items: center; gap: 8px; }
     .ci { color: #cfe9cf; font-size: 12px; }
     .note { margin-top: 12px; font-size: 13px; color: #ffe08a; }
@@ -87,8 +93,19 @@
     <div class="hand-preview" id="handPreview"></div>
     <div class="row" style="margin-top:12px">
       <div class="field small">
-        <label for="rolloutsInput">Rollouts / choice</label>
-        <input id="rolloutsInput" type="number" min="10" max="1000" step="10" value="120">
+        <label for="modeInput">Mode</label>
+        <select id="modeInput">
+          <option value="adaptive" selected>Adaptive (auto-stop)</option>
+          <option value="fixed">Fixed rollouts</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label id="rolloutsLabel" for="rolloutsInput">Max rollouts / choice</label>
+        <input id="rolloutsInput" type="number" min="10" max="2000" step="10" value="150">
+      </div>
+      <div class="field small" id="targetField">
+        <label for="targetInput">Target P(best) %</label>
+        <input id="targetInput" type="number" min="50" max="99" step="1" value="90">
       </div>
       <div class="field small">
         <label for="budgetInput">Draw budget</label>
@@ -150,7 +167,7 @@
     renderPreview();
 
     // ---------- worker pool ----------
-    const APP_VERSION = "2026-07-30-1";
+    const APP_VERSION = "2026-07-31-1";
     const POOL_SIZE = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 16));
     document.getElementById('coreCount').textContent = POOL_SIZE;
 
@@ -198,7 +215,31 @@
     }
     function setStatus(html) { document.getElementById('status').innerHTML = html; }
 
-    // ---------- orchestration ----------
+    // ---------- mode toggle ----------
+    const modeInput = document.getElementById('modeInput');
+    function syncMode() {
+      const adaptive = modeInput.value === 'adaptive';
+      document.getElementById('targetField').style.display = adaptive ? '' : 'none';
+      document.getElementById('rolloutsLabel').textContent =
+        adaptive ? 'Max rollouts / choice' : 'Rollouts / choice';
+    }
+    modeInput.addEventListener('change', syncMode);
+    syncMode();
+
+    // JS mirror of rollout_evaluator._wilson_ci, used for the provisional table
+    // that streams *during* a wave (authoritative P(best) still comes from Python
+    // at each wave boundary).
+    function wilsonCI(wins, n, z = 1.96) {
+      if (n === 0) return [0, 1];
+      const p = wins / n;
+      const denom = 1 + z * z / n;
+      const center = (p + z * z / (2 * n)) / denom;
+      const half = (z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)) / denom;
+      return [Math.max(0, center - half), Math.min(1, center + half)];
+    }
+    function pctFmt(x) { return (x * 100).toFixed(1) + '%'; }
+
+    // ---------- orchestration (adaptive wave loop, streamed live) ----------
     let running = false;
 
     async function analyze() {
@@ -210,7 +251,10 @@
 
       const hand = document.getElementById('handInput').value.trim();
       const choices = document.getElementById('choicesInput').value.trim();
-      const rollouts = parseInt(document.getElementById('rolloutsInput').value, 10) || 120;
+      const mode = modeInput.value;
+      const adaptive = mode === 'adaptive';
+      const maxRollouts = parseInt(document.getElementById('rolloutsInput').value, 10) || 150;
+      const target = (parseInt(document.getElementById('targetInput').value, 10) || 90) / 100;
       const budget = parseInt(document.getElementById('budgetInput').value, 10) || 22;
       const pw = parseInt(document.getElementById('prevalentWind').value, 10) || 0;
       const sw = parseInt(document.getElementById('seatWind').value, 10) || 0;
@@ -219,7 +263,8 @@
       let ctxJson;
       try {
         setStatus('<span class="spinner">Preparing</span>');
-        ctxJson = await pyCall(workers[0], 'prepare', hand, choices, rollouts, budget, pw, sw, 'greedy', seed);
+        // ctx.rollouts = maxRollouts is the column capacity of the win matrix.
+        ctxJson = await pyCall(workers[0], 'prepare', hand, choices, maxRollouts, budget, pw, sw, 'greedy', seed);
       } catch (err) {
         setStatus('Error: ' + err.message);
         running = false; btn.disabled = false;
@@ -233,55 +278,139 @@
         return;
       }
 
-      // Build the flat (choice, rollout) task list. Interleave by rollout index so
-      // early chunks touch every choice (nicer progressive feedback); the dynamic
-      // queue below handles the wide per-rollout cost variance.
-      const tasks = [];
-      for (let r = 0; r < rollouts; r++)
-        for (let ci = 0; ci < nChoices; ci++) tasks.push([ci, r]);
-      const total = tasks.length;
+      // Wave parameters (mirror evaluate_discard_choices_adaptive). Fixed mode is
+      // just a single wave of `maxRollouts` with early-stop/pruning disabled.
+      const INIT = adaptive ? Math.min(24, maxRollouts) : maxRollouts;
+      const BATCH = 12;
+      const TARGET = adaptive ? target : 2;   // 2 = unreachable => never early-stop
+      const PRUNE = adaptive;
 
-      // Small chunks => good load balancing across the pool (mirrors chunksize=1).
-      const CHUNK = Math.max(1, Math.min(4, Math.ceil(total / (POOL_SIZE * 8))));
-      const chunks = [];
-      for (let i = 0; i < tasks.length; i += CHUNK) chunks.push(tasks.slice(i, i + CHUNK));
+      // Per-choice running tallies, accumulated across all waves. nBy[ci] tracks how
+      // many rollouts a choice has been sampled: it rises to `done` for active
+      // choices and freezes when a choice is pruned.
+      const nBy = new Array(nChoices).fill(0);
+      const winsBy = new Array(nChoices).fill(0);
+      const ptsBy = new Array(nChoices).fill(0);
+      const trnBy = new Array(nChoices).fill(0);
+      const results = [];                                 // full [ci,r,won,turns,points]
+      let probBestBy = new Array(nChoices).fill(null);    // authoritative, wave boundaries
+      let active = new Set(Array.from({ length: nChoices }, (_, i) => i));
 
-      const results = [];
-      let done = 0, nextChunk = 0;
       const t0 = performance.now();
       document.getElementById('progWrap').style.display = 'block';
 
+      let done = 0, wave = 0, lastRender = 0;
+      let waveReceived = 0, waveTotal = 0;
+
       function updateProgress() {
-        const pct = total ? (done / total * 100) : 100;
+        const pct = waveTotal ? (waveReceived / waveTotal * 100) : 0;
         document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
         const elapsed = (performance.now() - t0) / 1000;
-        const rate = done > 0 ? elapsed / done : 0;
-        const eta = rate * (total - done);
-        setStatus(`<span class="spinner">Running rollouts</span> &mdash; `
-          + `${done}/${total} (${pct.toFixed(0)}%), ~${eta.toFixed(0)}s left`);
+        const rate = waveReceived > 0 ? elapsed / (results.length) : 0;
+        const eta = rate * (waveTotal - waveReceived);
+        setStatus(`<span class="spinner">Wave ${wave + 1}</span> &mdash; `
+          + `${active.size} active &times; ${done + Math.round(waveReceived / Math.max(active.size, 1))} rollouts `
+          + `(this wave ${waveReceived}/${waveTotal}, ~${eta.toFixed(0)}s)`);
       }
-      updateProgress();
 
-      // Dynamic work queue: whenever a worker finishes a chunk, feed it the next.
-      async function pump(worker) {
-        while (nextChunk < chunks.length) {
-          const chunk = chunks[nextChunk++];
-          const raw = await pyCall(worker, 'run_chunk', ctxJson, JSON.stringify(chunk));
-          const rows = JSON.parse(raw);
-          for (const row of rows) results.push(row);
-          done += chunk.length;
-          updateProgress();
+      function renderLive(finalNote) {
+        const rows = [];
+        for (let ci = 0; ci < nChoices; ci++) {
+          const n = nBy[ci];
+          const wr = n ? winsBy[ci] / n : 0;
+          const [lo, hi] = wilsonCI(winsBy[ci], n);
+          rows.push({
+            tile: ctx.choices[ci].name,
+            n, win_rate: wr, ci_low: lo, ci_high: hi,
+            prob_best: probBestBy[ci],
+            avg_points: winsBy[ci] ? ptsBy[ci] / winsBy[ci] : null,
+            avg_turns: winsBy[ci] ? trnBy[ci] / winsBy[ci] : null,
+            ev: wr * (winsBy[ci] ? ptsBy[ci] / winsBy[ci] : 0),
+            active: active.has(ci),
+          });
         }
+        rows.sort((a, b) => {
+          const pa = a.prob_best == null ? -1 : a.prob_best;
+          const pb = b.prob_best == null ? -1 : b.prob_best;
+          if (pb !== pa) return pb - pa;
+          return b.win_rate - a.win_rate;
+        });
+        renderRows(rows, finalNote);
       }
 
       try {
-        await Promise.all(workers.map(w => pump(w)));
-        setStatus('<span class="spinner">Aggregating</span>');
-        const tableJson = await pyCall(workers[0], 'aggregate', ctxJson, JSON.stringify(results));
-        const table = JSON.parse(tableJson);
+        while (true) {
+          const want = Math.min(wave === 0 ? INIT : BATCH, maxRollouts - done);
+          if (want <= 0) break;
+
+          const activeIds = Array.from(active).sort((a, b) => a - b);
+          // Wave task list: new rollout columns [done, done+want) for active choices.
+          const tasks = [];
+          for (let r = done; r < done + want; r++)
+            for (const ci of activeIds) tasks.push([ci, r]);
+          waveTotal = tasks.length; waveReceived = 0;
+
+          // Small chunks => good load balancing (mirrors the desktop chunksize=1).
+          const CHUNK = Math.max(1, Math.min(4, Math.ceil(tasks.length / (POOL_SIZE * 8))));
+          const chunks = [];
+          for (let i = 0; i < tasks.length; i += CHUNK) chunks.push(tasks.slice(i, i + CHUNK));
+          let nextChunk = 0;
+          updateProgress();
+
+          // Dynamic work queue: feed each worker the next chunk as it frees up, and
+          // stream the provisional table as results arrive.
+          async function pump(worker) {
+            while (nextChunk < chunks.length) {
+              const chunk = chunks[nextChunk++];
+              const rows = JSON.parse(await pyCall(worker, 'run_chunk', ctxJson, JSON.stringify(chunk)));
+              for (const [ci, r, won, turns, points] of rows) {
+                results.push([ci, r, won, turns, points]);
+                nBy[ci] += 1;
+                if (won) { winsBy[ci] += 1; ptsBy[ci] += points; trnBy[ci] += turns; }
+              }
+              waveReceived += chunk.length;
+              const now = performance.now();
+              if (now - lastRender > 180) { lastRender = now; updateProgress(); renderLive(); }
+            }
+          }
+          await Promise.all(workers.map(pump));
+          done += want;
+
+          // Authoritative wave-boundary stats from Python (paired bootstrap over the
+          // active choices on shared columns [0, done)). Identical to the desktop
+          // adaptive run.
+          setStatus(`<span class="spinner">Scoring wave ${wave + 1}</span> &mdash; `
+            + `${done} rollouts / active choice so far&hellip;`);
+          const agg = JSON.parse(await pyCall(workers[0], 'aggregate_adaptive', ctxJson,
+            JSON.stringify(results), JSON.stringify(activeIds), JSON.stringify(nBy), done));
+          probBestBy = new Array(nChoices).fill(0);
+          for (const row of agg.table) probBestBy[row.pos] = row.prob_best;
+          renderLive();
+
+          // Leader + stop condition.
+          let leader = -1, leaderP = -1;
+          for (const ci of active) if (probBestBy[ci] > leaderP) { leaderP = probBestBy[ci]; leader = ci; }
+          if (leaderP >= TARGET || done >= maxRollouts) break;
+
+          // Prune choices that are statistically out of the race (95% CI upper bound
+          // below the leader's lower bound). The leader is never pruned; keep >= 2.
+          if (PRUNE && active.size > 2) {
+            const [leadLo] = wilsonCI(winsBy[leader], done);
+            const drop = [];
+            for (const ci of active) {
+              if (ci === leader) continue;
+              const [, hi] = wilsonCI(winsBy[ci], done);
+              if (hi < leadLo) drop.push(ci);
+            }
+            if (drop.length && active.size - drop.length >= 2)
+              for (const ci of drop) active.delete(ci);
+          }
+          wave += 1;
+        }
+
         const secs = ((performance.now() - t0) / 1000).toFixed(1);
-        renderResults(table, ctx, secs);
-        setStatus(`Done in ${secs}s (${total} rollouts across ${POOL_SIZE} engines).`);
+        renderLive(true);
+        setStatus(`Done in ${secs}s &mdash; ${done} rollouts / active choice across ${POOL_SIZE} engines.`);
       } catch (err) {
         setStatus('Error during rollouts: ' + err.message);
       } finally {
@@ -291,33 +420,43 @@
       }
     }
 
-    function pctFmt(x) { return (x * 100).toFixed(1) + '%'; }
-    function renderResults(table, ctx, secs) {
-      if (!table.length) { document.getElementById('results').innerHTML = ''; return; }
+    function renderRows(rows, finalNote) {
+      if (!rows.length) { document.getElementById('results').innerHTML = ''; return; }
       let html = `<table><thead><tr>`
         + `<th>discard</th><th>win%</th><th>95% CI</th><th>P(best)</th>`
-        + `<th>avg pts</th><th>avg turns</th><th>EV</th></tr></thead><tbody>`;
-      table.forEach((s, i) => {
+        + `<th>avg pts</th><th>avg turns</th><th>EV</th><th>n</th></tr></thead><tbody>`;
+      let leaderShown = false;
+      rows.forEach((s) => {
         const ci = `${(s.ci_low * 100).toFixed(0)}&ndash;${(s.ci_high * 100).toFixed(0)}%`;
         const pts = s.avg_points != null ? s.avg_points.toFixed(1) : '&ndash;';
-        const trn = s.avg_turns_to_win != null ? s.avg_turns_to_win.toFixed(1) : '&ndash;';
-        html += `<tr class="${i === 0 ? 'best' : ''}">`
+        const trn = s.avg_turns != null ? s.avg_turns.toFixed(1) : '&ndash;';
+        const pbProv = s.prob_best == null;
+        const pb = pbProv ? '&hellip;' : (s.prob_best * 100).toFixed(0) + '%';
+        const cls = [];
+        const isLeader = s.active && !leaderShown;
+        if (isLeader) { cls.push('best'); leaderShown = true; }
+        if (!s.active) cls.push('pruned');
+        html += `<tr class="${cls.join(' ')}">`
           + `<td><div class="disc-cell">${tileEl(s.tile)}<span>${s.tile}</span></div></td>`
           + `<td>${pctFmt(s.win_rate)}</td>`
           + `<td class="ci">${ci}</td>`
-          + `<td>${(s.prob_best * 100).toFixed(0)}%</td>`
-          + `<td>${pts}</td><td>${trn}</td><td>${s.ev.toFixed(2)}</td></tr>`;
+          + `<td class="${pbProv ? 'prov' : ''}">${pb}</td>`
+          + `<td>${pts}</td><td>${trn}</td><td>${s.ev.toFixed(2)}</td>`
+          + `<td class="ci">${s.n}</td></tr>`;
       });
       html += `</tbody></table>`;
 
-      const top = table[0], second = table[1];
-      if (top.prob_best >= 0.90) {
-        html += `<div class="note">Confident pick: <b>discard ${top.tile}</b> `
-          + `(P(best)=${(top.prob_best * 100).toFixed(0)}%).</div>`;
-      } else if (second) {
-        html += `<div class="note">Top choice <b>${top.tile}</b> is only `
-          + `P(best)=${(top.prob_best * 100).toFixed(0)}% (next: ${second.tile} at `
-          + `${(second.prob_best * 100).toFixed(0)}%). Increase rollouts for a confident pick.</div>`;
+      if (finalNote) {
+        const activeRows = rows.filter(r => r.active);
+        const top = activeRows[0], second = activeRows[1];
+        if (top && top.prob_best != null && top.prob_best >= 0.90) {
+          html += `<div class="note">Confident pick: <b>discard ${top.tile}</b> `
+            + `(P(best)=${(top.prob_best * 100).toFixed(0)}%).</div>`;
+        } else if (top && second) {
+          html += `<div class="note">Top choice <b>${top.tile}</b> is only `
+            + `P(best)=${((top.prob_best || 0) * 100).toFixed(0)}% (next: ${second.tile} at `
+            + `${((second.prob_best || 0) * 100).toFixed(0)}%). Raise "Max rollouts" or lower the target for a confident pick.</div>`;
+        }
       }
       document.getElementById('results').innerHTML = html;
     }

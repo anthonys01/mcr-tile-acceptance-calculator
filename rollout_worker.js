@@ -13,7 +13,7 @@ let pyodide = null;
 
 // Bump on every release so browsers re-fetch the Python sources instead of
 // serving stale cached copies. Keep in sync with analyzer.html's worker URL.
-const APP_VERSION = "2026-07-30-1";
+const APP_VERSION = "2026-07-31-1";
 
 const PY_FILES = [
   'web_evaluator.py', 'rollout_evaluator.py', 'shanten_oracle.py', 'discard_policy.py',
