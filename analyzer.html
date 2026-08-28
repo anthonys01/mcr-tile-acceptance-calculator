@@ -65,6 +65,12 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px; }
+    .from-calc {
+      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.45);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px;
+    }
+    .from-calc a { color: #ffe08a; }
     @media (max-width: 600px) {
       :root { --tile-s: 46px; }
       body { padding: 12px; }
@@ -77,6 +83,11 @@
     Estimates each candidate discard's chance of reaching a legal (&ge;8-point) MCR win
     by Monte-Carlo rollouts &mdash; running entirely on <b>your</b> hardware across
     <span id="coreCount">?</span> parallel engines.
+  </div>
+
+  <div class="from-calc" id="fromCalc">
+    <span id="fromCalcText"></span>
+    <a id="backToCalc" href="index.html">&larr; Back to the acceptance calculator</a>
   </div>
 
   <div class="panel">
@@ -174,6 +185,39 @@
     document.getElementById('handInput').addEventListener('input', renderPreview);
     renderPreview();
 
+    // ---------- hand-off from the acceptance calculator ----------
+    // index.html links here with the analyzed hand and the discards the user ticked
+    // (?hand=..&choices=..&pw=..&sw=..&run=1), so the comparison starts on its own.
+    let autoRun = false;
+    (function applyUrlParams() {
+      const p = new URLSearchParams(window.location.search);
+      const hand = (p.get('hand') || '').trim();
+      const choices = (p.get('choices') || '').trim();
+      const pw = p.get('pw'), sw = p.get('sw');
+      if (hand) { document.getElementById('handInput').value = hand; renderPreview(); }
+      // A hand from the calculator without an explicit shortlist means "evaluate
+      // every tile"; don't leave the built-in demo shortlist in place.
+      if (p.has('choices') || hand) document.getElementById('choicesInput').value = choices;
+      if (pw && /^[0-4]$/.test(pw)) document.getElementById('prevalentWind').value = pw;
+      if (sw && /^[0-4]$/.test(sw)) document.getElementById('seatWind').value = sw;
+      if (!hand) return;
+      autoRun = p.get('run') === '1';
+
+      const nChoices = (choices.match(/[1-9][mpsz]/g) || []).length;
+      const banner = document.getElementById('fromCalc');
+      banner.style.display = 'flex';
+      document.getElementById('fromCalcText').innerHTML = nChoices
+        ? `Comparing <b>${nChoices} discard${nChoices > 1 ? 's' : ''}</b> sent from the acceptance calculator.`
+        : 'Hand sent from the acceptance calculator.';
+      const back = document.getElementById('backToCalc');
+      const bp = new URLSearchParams({ hand });
+      if (pw) bp.set('pw', pw);
+      if (sw) bp.set('sw', sw);
+      back.href = 'index.html?' + bp.toString();
+      if (autoRun) setStatus('<span class="spinner">Starting engines</span> '
+        + '&mdash; the comparison will run automatically&hellip;');
+    })();
+
     // ---------- worker pool ----------
     const APP_VERSION = "2026-07-31-1";
     const POOL_SIZE = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 16));
@@ -198,7 +242,8 @@
           if (readyCount === POOL_SIZE) {
             const btn = document.getElementById('runBtn');
             btn.disabled = false; btn.textContent = 'Analyze';
-            setStatus('Engines ready. Click <b>Analyze</b>.');
+            if (autoRun) { autoRun = false; analyze(); }
+            else setStatus('Engines ready. Click <b>Analyze</b>.');
           }
           return;
         }

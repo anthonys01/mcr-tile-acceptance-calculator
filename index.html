@@ -152,6 +152,25 @@
       background: var(--panel-2);
     }
     .discard-card.best { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+    .discard-card.picked { border-color: var(--accent); background: #24374f; }
+    .pick {
+      display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--muted);
+      cursor: pointer; user-select: none; padding: 4px 8px; border: 1px solid var(--border);
+      border-radius: 999px; background: var(--panel);
+    }
+    .discard-card.picked .pick { color: var(--accent); border-color: var(--accent); }
+    .pick input { accent-color: var(--accent); cursor: pointer; }
+
+    /* "Send to rollout analyzer" toolbar above the discard cards */
+    .rollout-bar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 10px 12px; margin-bottom: 12px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+    }
+    .rollout-bar .sel-count { font-size: .82rem; font-weight: 600; color: var(--accent); }
+    .rollout-bar button.primary { padding: 8px 16px; font-size: .85rem; }
+    .rollout-note { font-size: .78rem; color: var(--muted); flex-basis: 100%; }
+    .rollout-note.warn { color: var(--gold); }
     .discard-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .type-tags { display: flex; gap: 5px; flex-wrap: wrap; }
     .type-tag {
@@ -586,6 +605,94 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
       return e;
     }
 
+    // ---------- Rollout analyzer hand-off ----------
+    // The acceptance calculator ranks discards by *shape* (how many tiles advance
+    // the hand). analyzer.html goes further and Monte-Carlo simulates the rest of
+    // the hand for a shortlist of discards; we just hand it the hand + selection.
+    const ROLLOUT_PRESELECT = 3;   // pre-ticked candidates: enough to compare, still fast
+    const ROLLOUT_SLOW_FROM = 5;   // above this we warn that rollouts get slow
+
+    function buildAnalyzerUrl(handNotation, tiles) {
+      const url = new URL("analyzer.html", window.location.href);
+      const p = new URLSearchParams();
+      p.set("hand", handNotation);
+      p.set("choices", tiles.join(""));
+      p.set("pw", document.getElementById("prevalent_wind").value);
+      p.set("sw", document.getElementById("seat_wind").value);
+      p.set("run", "1");
+      url.search = p.toString();
+      return url.toString();
+    }
+
+    // Toolbar above the discard cards: shows the selection, and opens the rollout
+    // analyzer for the ticked discards. `selected` is a live Set of tile codes.
+    function rolloutBar(data, selected, cards) {
+      const bar = el("div", "rollout-bar");
+      const count = el("span", "sel-count");
+      const runBtn = el("button", "primary", "⚡ Compare in rollout analyzer");
+      const allBtn = el("button", "ghost", "Select all");
+      const noneBtn = el("button", "ghost", "Clear");
+      const note = el("div", "rollout-note");
+      // Rollouts simulate the concealed hand only, so declared groups (which the
+      // simulator does not model) make the estimate meaningless.
+      const melded = data.declared.length > 0;
+
+      bar.appendChild(el("span", "hint", "Not sure between a few discards?"));
+      bar.appendChild(count);
+      bar.appendChild(allBtn);
+      bar.appendChild(noneBtn);
+      bar.appendChild(el("span", "spacer"));
+      bar.appendChild(runBtn);
+      bar.appendChild(note);
+
+      function refresh() {
+        const n = selected.size;
+        count.textContent = n + " selected";
+        for (const [tile, card] of cards) card.classList.toggle("picked", selected.has(tile));
+        if (melded) {
+          runBtn.disabled = true;
+          note.className = "rollout-note warn";
+          note.textContent = "The rollout analyzer simulates concealed hands only — "
+            + "it cannot take your declared groups into account.";
+          return;
+        }
+        runBtn.disabled = n === 0;
+        note.className = "rollout-note" + (n > ROLLOUT_SLOW_FROM ? " warn" : "");
+        if (n === 0) {
+          note.textContent = "Tick “Compare” on the discards you hesitate between, then run "
+            + "Monte-Carlo rollouts to see which one actually wins more often.";
+        } else if (n === 1) {
+          note.textContent = "Tick at least one more discard to get a comparison — "
+            + "or run it alone to estimate its win rate. Opens in a new tab.";
+        } else if (n > ROLLOUT_SLOW_FROM) {
+          note.textContent = `${n} candidates will take a while to simulate; `
+            + "2–4 gives a confident answer much faster.";
+        } else {
+          note.textContent = "Simulates the rest of the hand many times and reports each "
+            + "discard's chance of reaching a legal (≥8 point) win. Opens in a new tab.";
+        }
+      }
+
+      allBtn.addEventListener("click", () => {
+        for (const d of data.discards) selected.add(d.tile);
+        syncPickBoxes(); refresh();
+      });
+      noneBtn.addEventListener("click", () => { selected.clear(); syncPickBoxes(); refresh(); });
+      runBtn.addEventListener("click", () => {
+        if (!selected.size) return;
+        const order = data.discards.map(d => d.tile).filter(t => selected.has(t));
+        window.open(buildAnalyzerUrl(data.hand, order), "_blank", "noopener");
+      });
+
+      function syncPickBoxes() {
+        for (const [tile, card] of cards) {
+          const box = card.querySelector("input[type=checkbox]");
+          if (box) box.checked = selected.has(tile);
+        }
+      }
+      return { bar, refresh };
+    }
+
     function renderDiscards(data) {
       const panel = el("section", "panel");
       panel.appendChild(el("h2", null, "Discard choices (best → worst)"));
@@ -593,11 +700,15 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         panel.appendChild(el("div", "hint", "No discard candidate found."));
         return panel;
       }
+      const selected = new Set(data.discards.slice(0, ROLLOUT_PRESELECT).map(d => d.tile));
+      const cards = new Map();
       const grid = el("div", null);
       grid.style.display = "grid";
       grid.style.gap = "10px";
+      let bar = null;
       for (const d of data.discards) {
         const card = el("div", "discard-card" + (d.recommended ? " best" : ""));
+        cards.set(d.tile, card);
         const head = el("div", "discard-head");
         head.appendChild(tileImg(d.tile));
         const meta = el("div");
@@ -612,6 +723,20 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         meta.appendChild(line1);
         meta.appendChild(typeTags(Object.keys(d.by_type)));
         head.appendChild(meta);
+        head.appendChild(el("span", "spacer"));
+
+        const pick = el("label", "pick");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = selected.has(d.tile);
+        box.title = "Compare this discard in the rollout analyzer";
+        box.addEventListener("change", () => {
+          if (box.checked) selected.add(d.tile); else selected.delete(d.tile);
+          if (bar) bar.refresh();
+        });
+        pick.appendChild(box);
+        pick.appendChild(el("span", null, "Compare"));
+        head.appendChild(pick);
         card.appendChild(head);
 
         const det = el("details", "nested");
@@ -630,7 +755,10 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         card.appendChild(det);
         grid.appendChild(card);
       }
+      bar = rolloutBar(data, selected, cards);
+      panel.appendChild(bar.bar);
       panel.appendChild(grid);
+      bar.refresh();
       return panel;
     }
 
