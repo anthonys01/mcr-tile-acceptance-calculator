@@ -103,6 +103,27 @@
       background-position: calc(var(--disc-s) * -23 / 128) 0;
       border-radius: 3px;
     }
+    .disc.clickable { cursor: pointer; }
+    @media (hover: hover) {
+      .disc.clickable:hover { transform: translateY(-4px); }
+    }
+    /* a discard that was scored as a mistake, so it stands out in the review */
+    .disc.err { box-shadow: 0 0 0 2px #e05260; }
+    .disc.sel { outline: 2px solid #ffc107; outline-offset: 1px; }
+    .disc.drawn { box-shadow: 0 0 0 2px #ffc107; }
+    .review-head {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffe08a;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .review-hand { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 10px; }
+    .review-sep { width: 10px; }
+    .hint { font-size: 13px; color: #cfe9cf; }
     .feedback {
       margin: 16px 0;
       padding: 14px 16px;
@@ -234,13 +255,14 @@
     <span id="seedDisplay" hidden>Seed: <b id="seedValue"></b>
       <button id="copySeedBtn" type="button" class="link-btn">Copy</button>
     </span>
+    <button id="shareBtn" type="button" class="link-btn" hidden>Copy run link</button>
   </div>
 
   <div id="message"></div>
 
   <div id="handZone" class="hand-zone"></div>
 
-  <div class="pile-label">Discards</div>
+  <div class="pile-label">Discards <span id="discardHint" class="hint" hidden>— click one to review that turn</span></div>
   <div id="discardZone"></div>
 
   <div id="feedback"></div>
@@ -265,6 +287,9 @@
       for (let n = 1; n <= 7; n++) all.push(n + 'z');
       return all;
     }
+    // index -> tile string, the exact inverse of tileIndex()
+    const TILE_BY_INDEX = allTileStrings();
+    function tileFromIndex(i) { return TILE_BY_INDEX[i]; }
     // preload every tile image so newly drawn tiles render with no latency
     allTileStrings().forEach(t => { const im = new Image(); im.src = 'tiles-png/' + t + '.png'; });
     function removeOne(arr, val) {
@@ -343,6 +368,9 @@
       document.getElementById('feedback').innerHTML = '';
       document.getElementById('discardZone').innerHTML = '';
       document.getElementById('wins').innerHTML = '';
+      document.getElementById('shareBtn').hidden = true;
+      document.getElementById('discardHint').hidden = true;
+      clearRunHash();
       const seedRaw = document.getElementById('seedInput').value.trim();
       const seedArgs = /^\d+$/.test(seedRaw) ? [seedRaw] : [];
       const game = JSON.parse(await pyCall('new_game', ...seedArgs));
@@ -354,6 +382,8 @@
         pool, pointer: 13, hand, visible, discards: [], turns: 0, errors: 0,
         drawn: null, turnData: null, seed: game.seed,
         prevalentWind: game.prevalent_wind, seatWind: game.seat_wind,
+        initialHand: [...hand], history: [], wins: null,
+        selectedTurn: null, replay: false, finished: false,
       };
       showSeed(game.seed);
       updateStats('--');
@@ -362,8 +392,25 @@
     }
 
     function renderDiscards() {
-      document.getElementById('discardZone').innerHTML =
-        state.discards.map(t => tileEl(t, 'disc')).join('');
+      const zone = document.getElementById('discardZone');
+      zone.innerHTML = state.discards.map((t, i) => {
+        const rec = state.history[i];
+        const cls = 'disc clickable'
+          + (rec && rec.isError ? ' err' : '')
+          + (state.selectedTurn === i ? ' sel' : '');
+        return `<span class="${cls}" data-turn="${i}" `
+          + `title="Turn ${i + 1}" style="background-image:url('tiles-png/${t}.png')"></span>`;
+      }).join('');
+      zone.querySelectorAll('[data-turn]').forEach(el => {
+        el.addEventListener('click', () => reviewTurn(parseInt(el.dataset.turn, 10)));
+      });
+      document.getElementById('discardHint').hidden = state.history.length === 0;
+      document.getElementById('shareBtn').hidden = state.history.length === 0;
+    }
+
+    function endRun() {
+      state.finished = true;
+      renderDiscards();
     }
 
     async function startTurn() {
@@ -371,6 +418,7 @@
       const drawn = state.pool[state.pointer++];
       if (drawn === undefined) {
         setMessage('Wall is empty — exhaustive draw. Start a new game.');
+        endRun();
         return;
       }
       state.hand.push(drawn);
@@ -413,7 +461,9 @@
       // freeze the board and score the user's discard on demand
       renderHand(false);
       setLoading(true);
+      const handBefore = [...state.hand];
       const handBeforeDiscard = JSON.stringify(state.hand);
+      const drawn = state.drawn;
       const userData = (tile === engTile)
         ? engData
         : JSON.parse(await pyCall('evaluate_discard',
@@ -422,40 +472,23 @@
       setLoading(false);
 
       state.turns++;
-      const diff = engData.number - userData.number;
       const isError = userData.away > engData.away || (userData.away === engData.away && userData.number < engData.number);
       if (isError) state.errors++;
+
+      // keep everything needed to replay this turn's feedback with no re-analysis
+      const record = {
+        turn: state.turns, drawn, handBefore, discard: tile,
+        engDiscard: engTile, user: userData, eng: engData, isError,
+      };
+      state.history.push(record);
 
       // perform the discard (visible vector keeps the tile as "seen")
       removeOne(state.hand, tile);
       state.drawn = null;
       state.discards.push(tile);
       renderHand(false);
-      renderDiscards();
       updateStats(userData.away);
-
-      // feedback
-      const fb = document.getElementById('feedback');
-      const accImgs = (acc) => acc.map(t => tileImg(t, 'mini static')).join('') || '∅';
-      let html =
-        `<div><b>${isError ? '✗ Suboptimal' : '✓ Good choice'}</b> — `
-        + `you discarded ${tileImg(tile, 'mini static')} `
-        + `(acceptance ${userData.number} tiles) — <b>${userData.away}-away</b>.</div>`
-        + `<div>Best discard: ${tileImg(engTile, 'mini static')} `
-        + `(acceptance ${engData.number} tiles) — <b>${engData.away}-away</b>. `
-      if (isError && userData.away === engData.away) {
-        html += `<div>Difference: <b>${diff} tiles</b>.</div>`
-      }
-      html += `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
-          + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
-      if (isError) {
-        html += `<div class="type-cols">`
-          + `<div class="type-col"><h4>Your best hand types</h4>${typeBreakdown(userData.best_results_acceptance)}</div>`
-          + `<div class="type-col"><h4>Engine's best hand types</h4>${typeBreakdown(engData.best_results_acceptance)}</div>`
-          + `</div>`;
-      }
-      fb.className = 'feedback ' + (isError ? 'error' : 'ok');
-      fb.innerHTML = html;
+      renderFeedback(record, false);
 
       // end-of-game detection: tenpai (0-shanten) to a valid (>=8 pts) hand
       if (userData.away === 0) {
@@ -465,10 +498,68 @@
           false, false, state.prevalentWind, state.seatWind));
         setLoading(false);
         const hasValid = wins.some(w => w.points >= 8);
-        if (hasValid) { showWins(wins); return; }
+        if (hasValid) { state.wins = wins; endRun(); showWins(wins); return; }
       }
       // immediately start the next turn; the feedback above stays visible
       await startTurn();
+    }
+
+    function handPreview(rec) {
+      const rest = sortTiles(removeOne([...rec.handBefore], rec.drawn));
+      return '<div class="review-hand">'
+        + rest.map(t => tileEl(t, 'disc')).join('')
+        + '<span class="review-sep"></span>'
+        + tileEl(rec.drawn, 'disc drawn')
+        + '</div>';
+    }
+
+    // Rebuild the exact feedback panel of a turn from its stored record.
+    // `review` re-displays an older turn, so it also recalls the hand at the time.
+    function renderFeedback(rec, review) {
+      const userData = rec.user;
+      const engData = rec.eng;
+      const engTile = rec.engDiscard;
+      const diff = engData.number - userData.number;
+      const accImgs = (acc) => acc.map(t => tileImg(t, 'mini static')).join('') || '∅';
+      let html = '';
+      if (review) {
+        html += `<div class="review-head">Turn ${rec.turn} of ${state.history.length}`
+          + `<button type="button" class="link-btn" id="latestTurnBtn">Back to last turn</button>`
+          + `</div>` + handPreview(rec);
+      }
+      html +=
+        `<div><b>${rec.isError ? '✗ Suboptimal' : '✓ Good choice'}</b> — `
+        + `you discarded ${tileImg(rec.discard, 'mini static')} `
+        + `(acceptance ${userData.number} tiles) — <b>${userData.away}-away</b>.</div>`
+        + `<div>Best discard: ${tileImg(engTile, 'mini static')} `
+        + `(acceptance ${engData.number} tiles) — <b>${engData.away}-away</b>. `;
+      if (rec.isError && userData.away === engData.away) {
+        html += `<div>Difference: <b>${diff} tiles</b>.</div>`
+      }
+      html += `<div class="accrow">Your acceptance: ${accImgs(userData.acceptance)}</div>`
+          + `<div class="accrow">Best acceptance: ${accImgs(engData.acceptance)}</div>`;
+      if (rec.isError) {
+        html += `<div class="type-cols">`
+          + `<div class="type-col"><h4>Your best hand types</h4>${typeBreakdown(userData.best_results_acceptance)}</div>`
+          + `<div class="type-col"><h4>Engine's best hand types</h4>${typeBreakdown(engData.best_results_acceptance)}</div>`
+          + `</div>`;
+      }
+      const fb = document.getElementById('feedback');
+      fb.className = 'feedback ' + (rec.isError ? 'error' : 'ok');
+      fb.innerHTML = html;
+      const back = document.getElementById('latestTurnBtn');
+      if (back) {
+        back.addEventListener('click', () => {
+          renderFeedback(state.history[state.history.length - 1], false);
+        });
+      }
+      state.selectedTurn = review ? rec.turn - 1 : null;
+      renderDiscards();
+    }
+
+    function reviewTurn(index) {
+      const rec = state.history[index];
+      if (rec) renderFeedback(rec, true);
     }
 
     function typeBreakdown(rows) {
@@ -506,7 +597,187 @@
       }).join('');
     }
 
+    // ---- run sharing: seed + choices + every analysis, packed into the URL ----
+    // Payload v1 (see below) is JSON -> deflate-raw -> base64url, prefixed by a
+    // one-char codec flag ('z' deflate-raw, 'u' plain) so old links stay readable.
+    //   {v, s:seed, pw, sw, h:[13 tile idx], L:[type labels], t:[turns], w:wins|null}
+    //   turn  = [drawnIdx, discardIdx, engDiscardIdx, engBlock, userBlock|null]
+    //   block = [away, [accIdx...], [[labelId, [accIdx...]], ...]]
+    //   wins  = [[tileIdx, points, table, [[tileIdx...], ...]], ...]
+    // Acceptance *numbers* are never stored: they are a pure function of the
+    // acceptance tiles and of the visible-tile vector, which the decoder replays.
+    const RUN_PARAM = '#r=';
+
+    function b64urlEncode(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function b64urlDecode(str) {
+      const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    async function pipeThrough(bytes, stream) {
+      const blob = new Blob([bytes]).stream().pipeThrough(stream);
+      return new Uint8Array(await new Response(blob).arrayBuffer());
+    }
+    async function packRun(obj) {
+      const bytes = new TextEncoder().encode(JSON.stringify(obj));
+      try {
+        return 'z' + b64urlEncode(await pipeThrough(bytes, new CompressionStream('deflate-raw')));
+      } catch (e) {
+        return 'u' + b64urlEncode(bytes);  // browser without CompressionStream
+      }
+    }
+    async function unpackRun(param) {
+      let bytes = b64urlDecode(param.slice(1));
+      if (param[0] === 'z') {
+        bytes = await pipeThrough(bytes, new DecompressionStream('deflate-raw'));
+      }
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+
+    function acceptanceNumber(acceptance, visible) {
+      return acceptance.reduce((sum, t) => sum + (4 - visible[tileIndex(t)]), 0);
+    }
+
+    function buildRunPayload() {
+      const labels = [];
+      const labelId = (name) => {
+        let i = labels.indexOf(name);
+        if (i < 0) { i = labels.length; labels.push(name); }
+        return i;
+      };
+      const encBlock = (d) => [
+        d.away,
+        d.acceptance.map(tileIndex),
+        (d.best_results_acceptance || []).map(r => [labelId(r.type), r.acceptance.map(tileIndex)]),
+      ];
+      const turns = state.history.map(rec => [
+        tileIndex(rec.drawn), tileIndex(rec.discard), tileIndex(rec.engDiscard),
+        encBlock(rec.eng),
+        rec.discard === rec.engDiscard ? null : encBlock(rec.user),
+      ]);
+      const wins = state.wins
+        ? state.wins.map(w => [tileIndex(w.tile), w.points, w.table,
+                               w.won_groups.map(g => g.map(tileIndex))])
+        : null;
+      return {
+        v: 1, s: state.seed, pw: state.prevalentWind, sw: state.seatWind,
+        h: state.initialHand.map(tileIndex), L: labels, t: turns, w: wins,
+      };
+    }
+
+    function decodeRunPayload(p) {
+      if (!p || p.v !== 1) throw new Error('unsupported run format');
+      const labels = p.L || [];
+      const decBlock = (b, visible) => {
+        const acceptance = b[1].map(tileFromIndex);
+        return {
+          away: b[0],
+          acceptance,
+          number: acceptanceNumber(acceptance, visible),
+          best_results_acceptance: (b[2] || []).map(r => {
+            const acc = r[1].map(tileFromIndex);
+            return { type: labels[r[0]], acceptance: acc, number: acceptanceNumber(acc, visible) };
+          }),
+        };
+      };
+      const hand = p.h.map(tileFromIndex);
+      const visible = new Array(34).fill(0);
+      hand.forEach(t => visible[tileIndex(t)]++);
+      const run = {
+        pool: null, pointer: 0, hand, visible, discards: [], turns: 0, errors: 0,
+        drawn: null, turnData: null, seed: p.s,
+        prevalentWind: p.pw, seatWind: p.sw,
+        initialHand: [...hand], history: [], wins: null,
+        selectedTurn: null, replay: true, finished: true,
+      };
+      for (const t of p.t) {
+        const drawn = tileFromIndex(t[0]);
+        run.hand.push(drawn);
+        run.visible[tileIndex(drawn)]++;
+        const handBefore = [...run.hand];
+        const eng = decBlock(t[3], run.visible);
+        const user = t[4] ? decBlock(t[4], run.visible) : eng;
+        const discard = tileFromIndex(t[1]);
+        const engDiscard = tileFromIndex(t[2]);
+        const isError = user.away > eng.away
+          || (user.away === eng.away && user.number < eng.number);
+        run.turns++;
+        if (isError) run.errors++;
+        removeOne(run.hand, discard);
+        run.discards.push(discard);
+        run.history.push({
+          turn: run.turns, drawn, handBefore, discard, engDiscard, user, eng, isError,
+        });
+      }
+      run.wins = p.w
+        ? p.w.map(w => ({
+            tile: tileFromIndex(w[0]), points: w[1], table: w[2],
+            won_groups: w[3].map(g => g.map(tileFromIndex)),
+          }))
+        : null;
+      return run;
+    }
+
+    function clearRunHash() {
+      if (location.hash.startsWith(RUN_PARAM)) {
+        history.replaceState(null, '', location.href.split('#')[0]);
+      }
+    }
+
+    async function copyRunLink() {
+      const btn = document.getElementById('shareBtn');
+      const original = 'Copy run link';
+      btn.disabled = true;
+      try {
+        const param = await packRun(buildRunPayload());
+        const url = location.href.split('#')[0] + RUN_PARAM + param;
+        const done = () => {
+          btn.textContent = 'Link copied!';
+          setTimeout(() => { btn.textContent = original; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url);
+          done();
+        } else {
+          const inp = document.getElementById('seedInput');
+          inp.value = url; inp.select(); document.execCommand('copy'); done();
+        }
+      } catch (err) {
+        btn.textContent = 'Share failed';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadSharedRun(param) {
+      try {
+        state = decodeRunPayload(await unpackRun(param));
+      } catch (err) {
+        setMessage('This shared run link could not be read.');
+        return;
+      }
+      showSeed(state.seed);
+      const last = state.history[state.history.length - 1];
+      renderHand(false);
+      updateStats(last ? last.user.away : '--');
+      document.getElementById('seedInput').value = state.seed;
+      if (state.wins) {
+        showWins(state.wins);
+      } else {
+        setMessage('<b>Shared run</b> — click any discard to review that turn. '
+          + 'Press “New Game” to play this deal yourself (seed is pre-filled).');
+      }
+      if (last) renderFeedback(last, false);
+      renderDiscards();
+    }
     document.getElementById('newGameBtn').addEventListener('click', newGame);
+    document.getElementById('shareBtn').addEventListener('click', copyRunLink);
     document.getElementById('copySeedBtn').addEventListener('click', () => {
       const seed = document.getElementById('seedValue').textContent;
       const btn = document.getElementById('copySeedBtn');
@@ -518,7 +789,15 @@
         inp.value = seed; inp.select(); document.execCommand('copy'); done();
       }
     });
-    window.trainer = { state: () => state };
+    window.trainer = {
+      state: () => state,
+      buildRunPayload, decodeRunPayload, packRun, unpackRun,
+    };
+
+    // a shared run replays entirely from the URL: no engine round-trip needed
+    if (location.hash.startsWith(RUN_PARAM)) {
+      loadSharedRun(location.hash.slice(RUN_PARAM.length));
+    }
   </script>
   <footer style="text-align:center;padding:16px;margin-top:24px;font-size:0.85em;color:#888;">
     Website by Anthonys01 &mdash; Tiles from <a href="https://martinpersson.org/" style="color:#888;">Martin Persson</a>
