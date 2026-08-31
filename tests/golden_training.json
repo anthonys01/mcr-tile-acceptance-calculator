@@ -19,7 +19,7 @@
               "9s"
             ],
             "number": 8,
-            "type": "Pure Shifted"
+            "type": "Four Pure Shifted Chows"
           },
           {
             "acceptance": [
@@ -35,7 +35,7 @@
               "9s"
             ],
             "number": 8,
-            "type": "Four Pure Shifted Chows"
+            "type": "Pure Shifted"
           }
         ],
         "number": 8

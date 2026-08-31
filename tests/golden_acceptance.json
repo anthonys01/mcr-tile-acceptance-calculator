@@ -1995,16 +1995,28 @@
     ],
     "closest_away": 2,
     "discard": {
-      "acceptance": [],
+      "acceptance": [
+        "1m",
+        "2s",
+        "4p",
+        "5p",
+        "7m"
+      ],
       "acceptance_by_type": {
-        "Knitted": []
+        "Seven Pairs": [
+          "1m",
+          "2s",
+          "4p",
+          "5p",
+          "7m"
+        ]
       },
-      "acceptance_count": 0,
+      "acceptance_count": 15,
       "away_after_discard": 1,
       "best_results": [
         "Knitted"
       ],
-      "tile": "6p"
+      "tile": "4m"
     },
     "needs_discard": true
   },

@@ -119,8 +119,9 @@ def test_acceptance_excludes_tiles_that_break_the_winning_wait():
     assert {str(tile) for tile in acceptance["Basic"]} == {"6p"}
 
     choices = get_discard_choices(best_results, results, acceptance, hand, yakus)
-    for _tile, accepted, _number, _by_type, _recommended, _score in choices:
-        assert "2m" not in {str(tile) for tile in accepted}
+    by_tile = {str(choice[0]): choice for choice in choices}
+    for tile in ("4m", "5s"):
+        assert {str(t) for t in by_tile[tile][1]} == {"6p"}
 
 
 def test_reachable_acceptance_keeps_single_missing_tile():

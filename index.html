@@ -719,6 +719,12 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         }
         line1.appendChild(el("span", "badge count", d.acceptance_count + " tiles accepted"));
         line1.appendChild(el("span", "badge", d.acceptance.length + " kinds"));
+        if (d.away_after_discard !== undefined && d.away_after_discard !== data.away_after_discard) {
+          const away = el("span", "badge away", d.away_after_discard + " away");
+          away.title = "This discard is only reachable through a hand type one step "
+            + "further out, so its acceptance count is not comparable with the ones above.";
+          line1.appendChild(away);
+        }
         if (d.score !== undefined) {
           const score = el("span", "badge", "score " + d.score);
           score.title = "Composite ranking score: acceptance weighted by hand value, "

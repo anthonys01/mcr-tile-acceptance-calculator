@@ -69,7 +69,10 @@ recommends ``6s`` with 16 tiles, rollouts and humans recommend ``7p`` with 15):
    ukeire of the 13 tiles left behind, which measures how many ways the hand can
    still improve regardless of which MCR pattern it eventually lands on. This is
    what distinguishes ``8p`` on the first hand (38 tiles vs 33 for ``5m``) and
-   ``7p`` on the second (52 tiles vs 20 for ``6s``).
+   ``7p`` on the second (52 tiles vs 20 for ``6s``). The raw ukeire is discounted
+   by ``SHAPE_STEP`` per standard shanten, otherwise the factor would reward
+   stepping *backwards*: a 2-shanten hand mechanically accepts far more tiles
+   than a 1-shanten one.
 """
 
 import os
@@ -127,9 +130,19 @@ SCORE_MARGIN = float(os.environ.get("MCR_RANK_MARGIN", "0.15"))
 # Geometric damping applied to the 2nd, 3rd, ... hand type that credits the same
 # acceptance tile. 0 would de-duplicate strictly, 1 would double-count.
 ROUTE_DECAY = float(os.environ.get("MCR_RANK_ROUTE_DECAY", "0.45"))
-# Exponent of the shape factor (yaku-agnostic ukeire of the remaining 13 tiles,
-# relative to the widest candidate). 0 disables the shape correction.
+# Exponent of the shape factor (yaku-agnostic ukeire of the remaining 13 tiles).
+# 0 disables the shape correction.
 SHAPE_GAMMA = float(os.environ.get("MCR_RANK_SHAPE_GAMMA", "0.3"))
+# Per-shanten discount applied to the raw ukeire before it is used as a shape
+# factor. Raw ukeire grows with the distance to a win - a 2-shanten hand simply
+# has more improving tiles than a 1-shanten one - so comparing it directly would
+# reward being *further* from completing. Roughly the fraction of that width that
+# survives one more step.
+SHAPE_STEP = float(os.environ.get("MCR_RANK_SHAPE_STEP", "0.5"))
+# Ukeire of a good 1-shanten hand: the reference the shape factor is measured
+# against. Only sets the scale of the factor (a common multiplier cannot change
+# the ranking), so it needs no tuning.
+SHAPE_REF_UKEIRE = 40.0
 
 _FULL_COPIES = 4
 
@@ -163,14 +176,14 @@ def _value_weight(points: float) -> float:
 
 
 @lru_cache(maxsize=None)
-def _shape_ukeire(counts_t: tuple) -> int:
-    """Yaku-agnostic ukeire of a 13-tile multiset.
+def _shape_ukeire(counts_t: tuple) -> tuple:
+    """Yaku-agnostic shape of a 13-tile multiset, as ``(shanten, ukeire)``.
 
-    Number of live tiles that lower the *standard* shanten, ignoring MCR
-    legality entirely. It measures how many ways the hand can still improve
-    whatever pattern it ends up in, which is exactly the flexibility the MCR
-    blueprints cannot express: a blueprint only describes the tiles it uses, so a
-    complete chow it happens not to need looks free to break.
+    ``ukeire`` is the number of live tiles that lower the *standard* shanten,
+    ignoring MCR legality entirely. It measures how many ways the hand can still
+    improve whatever pattern it ends up in, which is exactly the flexibility the
+    MCR blueprints cannot express: a blueprint only describes the tiles it uses,
+    so a complete chow it happens not to need looks free to break.
     """
     counts = list(counts_t)
     reference = standard_shanten(counts)
@@ -183,14 +196,27 @@ def _shape_ukeire(counts_t: tuple) -> int:
         if standard_shanten(counts) < reference:
             total += _FULL_COPIES - seen
         counts[index] = seen
-    return total
+    return reference, total
 
 
-def _shape_ukeire_after_discard(hand: MahjongHand, tile: MahjongTile) -> int:
+def _shape_factor(hand: MahjongHand, tile: MahjongTile) -> float:
+    """Shape flexibility left behind by discarding ``tile``, as a multiplier.
+
+    The raw ukeire is discounted by ``SHAPE_STEP`` per shanten, because a hand
+    further from a win mechanically accepts more tiles; without that correction
+    the factor would reward stepping *backwards*. The result depends only on the
+    candidate itself, so adding candidates to the pool never changes the score of
+    the existing ones.
+    """
+    if not SHAPE_GAMMA:
+        return 1.0
     counts = counts_from_tiles(hand.get_free_tiles())
     if counts[tile.index]:
         counts[tile.index] -= 1
-    return _shape_ukeire(tuple(counts))
+    shanten, ukeire = _shape_ukeire(tuple(counts))
+    reference = SHAPE_REF_UKEIRE * SHAPE_STEP
+    score = ukeire * SHAPE_STEP**shanten
+    return (score / reference) ** SHAPE_GAMMA
 
 
 def _self_draw_only_acceptance(
@@ -306,10 +332,7 @@ def score_discards(
 
     scores: dict[MahjongTile, float] = {}
     breakdown: dict[MahjongTile, dict[str, float]] = {}
-    shape_by_tile = {
-        tile: _shape_ukeire_after_discard(hand, tile) for tile in candidates
-    }
-    best_shape = max(shape_by_tile.values(), default=0)
+    shape_by_tile = {tile: _shape_factor(hand, tile) for tile in candidates}
 
     for tile in candidates:
         # Acceptance tiles are pooled across hand types with diminishing returns:
@@ -345,12 +368,9 @@ def score_discards(
             )
         if not components:
             continue
-        # Shape flexibility of the 13 tiles left behind, relative to the widest
-        # candidate. Invisible to the blueprints, which never account for the
-        # tiles they do not use.
-        shape_factor = 1.0
-        if best_shape and SHAPE_GAMMA:
-            shape_factor = (shape_by_tile[tile] / best_shape) ** SHAPE_GAMMA
+        # Shape flexibility of the 13 tiles left behind. Invisible to the
+        # blueprints, which never account for the tiles they do not use.
+        shape_factor = shape_by_tile[tile]
         scores[tile] = sum(components.values()) * shape_factor
         breakdown[tile] = dict(components)
         if shape_factor != 1:

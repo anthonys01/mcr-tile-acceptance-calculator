@@ -2,6 +2,7 @@
 Tile Acceptance calculator
 """
 import json
+import os
 from collections import defaultdict
 from enum import Enum
 from typing import Iterable
@@ -269,24 +270,73 @@ def _basic_combo_label(yakus, best_results):
     return _yaku_display_name(main_yaku)
 
 
+# How many extra steps away from the closest hand type a blueprint may be and
+# still contribute discard candidates. With 0 only the closest hand types are
+# considered, which makes any tile they all *use* undiscardable - on
+# ``134789m12345p599s`` the only closest type is Basic and every Basic blueprint
+# needs ``1m`` for ``123m``, so ``1m`` could never be suggested even though
+# dropping it leaves a far wider hand. Allowing one extra step exposes those
+# trade-offs; the candidates are still ranked (and heavily discounted for the
+# extra distance) by :mod:`discard_ranking`.
+CANDIDATE_AWAY_SLACK = int(os.environ.get("MCR_CANDIDATE_AWAY_SLACK", "1"))
+
+
+def _hand_type_distances(results) -> dict:
+    """Residue length (tiles still missing) of the best combination per hand type."""
+    return {
+        hand_type: len(hand_results[0][1])
+        for hand_type, hand_results in results.items()
+        if hand_results and hand_results[0]
+    }
+
+
 def _build_discard_candidates(
-    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+    best_results,
+    results,
+    acceptance,
+    hand: MahjongHand,
+    basic_yakus=None,
+    away_slack: int = CANDIDATE_AWAY_SLACK,
 ):
     """Compute, for every discardable tile, the union of accepted tiles it keeps.
 
-    Returns three mappings keyed by the candidate discard tile:
+    Hand types within ``away_slack`` steps of the closest one contribute
+    candidates, but every candidate is described *at its own distance*: a tile's
+    acceptance is the union over the closest hand types that actually offer it,
+    ignoring the types that are further away. So a tile reachable through a
+    closest-hand-type blueprint keeps exactly the acceptance it had before, and a
+    tile that only appears one step further is reported with that step's
+    acceptance instead of being silently mixed in with nearer routes.
+
+    Returns four mappings keyed by the candidate discard tile:
       * ``candidate_acceptance``: union of useful acceptance tiles across types
       * ``candidate_acceptance_by_type``: same, split per displayed hand-type label
-      * ``candidate_type_occurrence``: set of hand types the tile appears in
+      * ``candidate_type_occurrence``: hand types the tile appears in, at its own
+        distance (see below)
+      * ``candidate_away``: residue length of the closest blueprint offering it
     """
-    # tile -> set union des acceptances de tous les types où elle est dans le résidu
-    candidate_acceptance: dict[MahjongTile, set] = defaultdict(set)
-    candidate_acceptance_by_type: dict[MahjongTile, dict] = defaultdict(
-        lambda: defaultdict(set)
+    distances = _hand_type_distances(results)
+    min_away = min(distances.values(), default=0)
+    considered = [
+        hand_type
+        for hand_type, distance in distances.items()
+        if distance <= min_away + max(away_slack, 0)
+    ]
+    # Keep the closest hand types first so their labels win ties in the display.
+    considered.sort(key=lambda hand_type: (distances[hand_type], hand_type))
+
+    # tile -> away -> set union des acceptances de tous les types à cette distance
+    by_away: dict[MahjongTile, dict] = defaultdict(lambda: defaultdict(set))
+    by_away_and_type: dict[MahjongTile, dict] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(set))
     )
     candidate_type_occurrence: dict[MahjongTile, set] = defaultdict(set)
+    occurrence_by_away: dict[MahjongTile, dict] = defaultdict(
+        lambda: defaultdict(set)
+    )
 
-    for best_result in best_results:
+    for best_result in considered:
+        away = distances[best_result]
         acceptance_pool = acceptance[best_result]
         for combo_index, (combi, residue) in enumerate(results[best_result]):
             # Basic combinations are labelled by their main yaku (or dropped from
@@ -299,6 +349,7 @@ def _build_discard_candidates(
                 label = best_result
             for tile in set(residue):
                 candidate_type_occurrence[tile].add(best_result)
+                occurrence_by_away[tile][away].add(best_result)
                 if best_result == HandType.SEVEN_PAIRS.value:
                     useful_acceptance = set(acceptance_pool)
                     useful_acceptance.remove(tile)
@@ -310,16 +361,39 @@ def _build_discard_candidates(
                     useful_acceptance = hand_full_acceptance.intersection(
                         acceptance_pool
                     )
-                candidate_acceptance[tile].update(useful_acceptance)  # union
+                by_away[tile][away].update(useful_acceptance)  # union
                 if label is not None:
-                    candidate_acceptance_by_type[tile][label].update(useful_acceptance)
+                    by_away_and_type[tile][away][label].update(useful_acceptance)
 
-    return candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence
+    # Describe each candidate at the distance of the closest blueprint that
+    # actually offers it, so acceptance counts stay comparable within a distance
+    # and a nearer route is never diluted by a further one.
+    candidate_acceptance: dict[MahjongTile, set] = {}
+    candidate_acceptance_by_type: dict[MahjongTile, dict] = {}
+    candidate_away: dict[MahjongTile, int] = {}
+    for tile, per_away in by_away.items():
+        away = min(per_away)
+        candidate_away[tile] = away
+        candidate_acceptance[tile] = per_away[away]
+        candidate_acceptance_by_type[tile] = dict(by_away_and_type[tile][away])
+        # The "most useless tile" tiebreak counts how many blueprints still want
+        # the tile. Restricting it to the tile's own distance keeps it stable when
+        # the pool is widened: a closest candidate is compared exactly as it was
+        # before further hand types became visible.
+        candidate_type_occurrence[tile] = occurrence_by_away[tile][away]
+
+    return (
+        candidate_acceptance,
+        candidate_acceptance_by_type,
+        candidate_type_occurrence,
+        candidate_away,
+    )
 
 
 def _rank_candidates(
     candidate_acceptance,
     candidate_type_occurrence,
+    candidate_away,
     best_results,
     results,
     acceptance,
@@ -340,7 +414,10 @@ def _rank_candidates(
     behaviour, with the legacy "most useless tile" tiebreak) is only replaced when
     another candidate beats it by more than ``SCORE_MARGIN``. Raw acceptance is a
     low-variance signal, so near-ties - symmetric waits, interchangeable discards -
-    keep the historical answer instead of flipping on scoring noise.
+    keep the historical answer instead of flipping on scoring noise. The baseline
+    is computed over the candidates at the *closest* distance only, so widening
+    the pool (see ``CANDIDATE_AWAY_SLACK``) can add challengers but never moves
+    the reference the challengers have to beat.
     """
     # Imported lazily: discard_ranking is a consumer of this module's concepts.
     from discard_ranking import SCORE_MARGIN, score_discards
@@ -361,14 +438,21 @@ def _rank_candidates(
     def _pick(tiles):
         return _get_most_useless_tile_from(tiles, candidate_type_occurrence)
 
-    # Legacy baseline: maximum immediate acceptance, useless-tile tiebreak.
+    # Legacy baseline: maximum immediate acceptance among the closest candidates,
+    # useless-tile tiebreak.
+    min_away = min(candidate_away.values(), default=0)
+    closest = {
+        tile: acc
+        for tile, acc in candidate_acceptance.items()
+        if candidate_away[tile] == min_away
+    }
     best_acceptance = max(
-        _get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values()
+        _get_acceptance_tile_number(hand, acc) for acc in closest.values()
     )
     baseline = _pick(
         [
             tile
-            for tile, acc in candidate_acceptance.items()
+            for tile, acc in closest.items()
             if _get_acceptance_tile_number(hand, acc) == best_acceptance
         ]
     )
@@ -403,8 +487,13 @@ def _get_best_discard_choice(
     prevalent_wind=0,
     seat_wind=0,
 ):
-    candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
-        _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
+    (
+        candidate_acceptance,
+        candidate_acceptance_by_type,
+        candidate_type_occurrence,
+        candidate_away,
+    ) = _build_discard_candidates(
+        best_results, results, acceptance, hand, basic_yakus
     )
 
     if not candidate_acceptance:
@@ -413,6 +502,7 @@ def _get_best_discard_choice(
     _scores, to_discard = _rank_candidates(
         candidate_acceptance,
         candidate_type_occurrence,
+        candidate_away,
         best_results,
         results,
         acceptance,
@@ -441,14 +531,23 @@ def get_discard_choices(
     """Rank every discardable tile from best to worst.
 
     Each entry is ``(tile, acceptance_set, acceptance_count, acceptance_by_type,
-    is_recommended, score)``. Ordering uses the composite
+    is_recommended, score, away)``. Ordering uses the composite
     :mod:`discard_ranking` score (value-weighted, multi-hand-type, self-draw
     aware) rather than the raw acceptance count, which stays in the tuple for
-    display. The recommended flag marks the single tile that
-    ``_get_best_discard_choice`` would pick.
+    display. ``away`` is the number of tiles still missing from the closest
+    blueprint that offers this discard: candidates one step further than the
+    closest hand type are included (see ``CANDIDATE_AWAY_SLACK``), so acceptance
+    counts are only comparable between entries sharing the same ``away``. The
+    recommended flag marks the single tile that ``_get_best_discard_choice``
+    would pick.
     """
-    candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
-        _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
+    (
+        candidate_acceptance,
+        candidate_acceptance_by_type,
+        candidate_type_occurrence,
+        candidate_away,
+    ) = _build_discard_candidates(
+        best_results, results, acceptance, hand, basic_yakus
     )
 
     if not candidate_acceptance:
@@ -457,6 +556,7 @@ def get_discard_choices(
     scores, recommended = _rank_candidates(
         candidate_acceptance,
         candidate_type_occurrence,
+        candidate_away,
         best_results,
         results,
         acceptance,
@@ -471,6 +571,7 @@ def get_discard_choices(
         key=lambda tile: (
             tile is not recommended,
             -scores.get(tile, 0.0),
+            candidate_away[tile],
             -_get_acceptance_tile_number(hand, candidate_acceptance[tile]),
             tile.index,
         ),
@@ -486,6 +587,7 @@ def get_discard_choices(
                 dict(candidate_acceptance_by_type[tile]),
                 tile is recommended,
                 round(scores.get(tile, 0.0), 2),
+                candidate_away[tile],
             )
         )
     return choices
@@ -860,12 +962,13 @@ def analyze_hand_structured(
                 "acceptance_count": count,
                 "score": score,
                 "recommended": recommended,
+                "away_after_discard": max(away - 1, 0),
                 "by_type": {
                     label: sorted(str(accepted) for accepted in tiles)
                     for label, tiles in by_type.items()
                 },
             }
-            for tile, acc, count, by_type, recommended, score in choices
+            for tile, acc, count, by_type, recommended, score, away in choices
         ]
         data["away_after_discard"] = max(closest_away - 1, 0)
     else:

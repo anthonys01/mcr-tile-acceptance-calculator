@@ -71,7 +71,10 @@ def _acceptance_by_type_payload(acceptance_by_type, visible):
                 "number": _acceptance_number(acc_tiles, visible),
             }
         )
-    payload.sort(key=lambda entry: entry["number"], reverse=True)
+    # Secondary key on the label: without it, entries with the same count keep the
+    # insertion order of ``acceptance_by_type``, which follows set iteration and so
+    # varies between runs.
+    payload.sort(key=lambda entry: (-entry["number"], entry["type"]))
     return payload
 
 
