@@ -16,6 +16,7 @@ import os
 import pytest
 
 from mahjong_objects import MahjongHand
+from hand_types.basic import _reachable_acceptance
 from tests.snapshot_util import SNAPSHOT_HANDS, snapshot_for_hand
 from tile_acceptance_calculator import (
     analyze_hand,
@@ -101,3 +102,36 @@ def test_discard_ranking_keeps_completed_group():
     assert by_tile["7p"][5] > by_tile["6s"][5], "7p must win on the composite score"
     assert str(choices[0][0]) == "7p"
     assert choices[0][4] is True
+
+
+def test_acceptance_excludes_tiles_that_break_the_winning_wait():
+    """134789m12345p599s: 2m is not acceptance even though the plan needs it.
+
+    Discarding 4m leaves 13m 789m 123p 45p 99s, two tiles away from
+    123m 789m 123p 456p 99s. That hand only reaches 8 points when 2m is the
+    *winning* tile (Closed Wait, +1): drawing 6p first leaves a lone 2m wait and
+    wins, while drawing 2m first leaves a two-sided 3p/6p wait worth 7 points,
+    i.e. an illegal hand. Only 6p is real progress.
+    """
+    hand = parse_hand("134789m12345p599s")
+    results, acceptance, best_results, _away, yakus = analyze_hand(hand)
+    assert best_results == ["Basic"]
+    assert {str(tile) for tile in acceptance["Basic"]} == {"6p"}
+
+    choices = get_discard_choices(best_results, results, acceptance, hand, yakus)
+    for _tile, accepted, _number, _by_type, _recommended, _score in choices:
+        assert "2m" not in {str(tile) for tile in accepted}
+
+
+def test_reachable_acceptance_keeps_single_missing_tile():
+    """A one-tile-away plan always accepts that tile - it is the winning draw."""
+    two_man, six_pin = parse_hand("2m6p").get_free_tiles()
+    assert _reachable_acceptance([two_man], (two_man,)) == (two_man,)
+    # 2m is the only scoring winning tile, so it must not be drawn first
+    assert _reachable_acceptance([two_man, six_pin], (two_man,)) == (six_pin,)
+    # both orders legal -> both tiles are acceptance
+    reachable = _reachable_acceptance([two_man, six_pin], (two_man, six_pin))
+    assert set(reachable) == {two_man, six_pin}
+    # a duplicate scoring tile can be drawn first, the second copy still wins
+    assert _reachable_acceptance([two_man, two_man], (two_man,)) == (two_man,)
+    assert _reachable_acceptance([two_man, six_pin], ()) == ()

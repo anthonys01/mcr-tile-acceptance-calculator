@@ -336,6 +336,9 @@ def get_standard_hand_yakus(
     return list(results.items())
 
 
+# Minimum point count of a legal MCR hand.
+_MIN_LEGAL_POINTS = 8
+
 _TILE_DEPENDENT_YAKUS = frozenset(
     {
         MahjongMCRYaku.NINE_GATES,
@@ -442,15 +445,22 @@ def get_best_yakus_for_won_hand(
     last_tile: bool = False,
     prevalent_wind: int = 0,
     seat_wind: int = 0,
-) -> tuple[list | None, int]:
+) -> tuple[list | None, int, tuple]:
     """Compute the best-scoring yakus across all winning tiles for a given won_hand.
 
     Optimises by computing tile-independent yakus only once, then merging with
     per-tile dependent yakus (wait type, concealed pungs) for each winning tile.
-    Returns (best_yakus, best_points); best_yakus is None when no yaku scores above 7.
+
+    :return: ``(best_yakus, best_points, scoring_tiles)``. ``best_yakus`` is None
+        when no winning tile scores above 7. ``scoring_tiles`` lists the winning
+        tiles that individually reach the 8-point minimum: several of the yakus
+        checked here depend on which tile is drawn *last* (wait shape, concealed
+        pungs, nine gates), so a hand can be legal on one winning tile and illegal
+        on another. Callers that count "tiles that bring the hand closer" need
+        that distinction - see ``hand_types.basic._reachable_acceptance``.
     """
     if not winning_tiles:
-        return None, 0
+        return None, 0, ()
 
     # Use the first winning tile to build the base context for the independent pass.
     # Independent yakus don't consult winning_tile, so the choice is arbitrary.
@@ -464,7 +474,8 @@ def get_best_yakus_for_won_hand(
     )
 
     best_yakus = None
-    best_points = 7
+    best_points = _MIN_LEGAL_POINTS - 1
+    scoring_tiles = []
 
     for winning_tile in winning_tiles:
         acceptance = compute_acceptance(won_hand, winning_tile)
@@ -473,11 +484,13 @@ def get_best_yakus_for_won_hand(
         yakus = _merge_winning_tile_yakus(base_results, dep_results)
         yakus = _replace_with_chicken_when_relevant(yakus)
         points = get_total_points(yakus)
+        if points >= _MIN_LEGAL_POINTS and winning_tile not in scoring_tiles:
+            scoring_tiles.append(winning_tile)
         if points > best_points:
             best_yakus = yakus
             best_points = points
 
-    return best_yakus, best_points
+    return best_yakus, best_points, tuple(scoring_tiles)
 
 def _replace_with_chicken_when_relevant(yakus):
     """If the basic hand only has CONCEALED_HAND, CHICKEN_HAND is possible just with calling one random group"""

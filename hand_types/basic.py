@@ -1,3 +1,4 @@
+from collections import Counter
 from functools import cache, partial, reduce
 from itertools import product
 
@@ -59,6 +60,42 @@ def _compute_acceptance_for_winning_tile(
 _NO_YAKUS = object()
 
 
+def _reachable_acceptance(added_tiles, scoring_tiles):
+    """Tiles that can be drawn *now* without killing the 8-point plan.
+
+    ``added_tiles`` is the whole multiset of tiles still missing from ``won_hand``;
+    ``scoring_tiles`` are the ones that reach the 8-point minimum when they are the
+    *winning* tile. Several yakus depend on which tile arrives last - wait shape
+    above all - so the order of the draws matters and not every missing tile is
+    real progress.
+
+    ``13m 789m 123p 45p 99s`` needs both ``2m`` and ``6p``, but the hand only
+    reaches 8 points by winning on ``2m`` (Closed Wait, +1). Drawing ``6p`` first
+    leaves a single ``2m`` wait and is progress; drawing ``2m`` first leaves a
+    two-sided ``3p``/``6p`` wait worth 7 points, i.e. an illegal hand. So ``6p``
+    is acceptance for this plan and ``2m`` is not.
+
+    A draw therefore counts when a scoring tile is still missing afterwards, or
+    when it completes the hand itself.
+    """
+    if not scoring_tiles:
+        return ()
+    remaining = Counter(added_tiles)
+    scoring = set(scoring_tiles)
+    reachable = []
+    for tile in remaining:
+        remaining[tile] -= 1
+        if sum(remaining.values()):
+            still_reachable = any(remaining[scorer] for scorer in scoring)
+        else:
+            # last missing tile: drawing it wins, provided it is a scoring tile
+            still_reachable = tile in scoring
+        remaining[tile] += 1
+        if still_reachable:
+            reachable.append(tile)
+    return tuple(reachable)
+
+
 def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind, self_drawn=False):
     fastest_hands = []
     best_shanten = 13
@@ -98,7 +135,7 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind, self_d
                 complete_hand = MahjongHand(_get_flattened_tiles(won_hand))
                 complete_hand.declared_tiles = declared_tiles
                 complete_hand.kongs = kongs
-                best_yakus, _ = get_best_yakus_for_won_hand(
+                best_yakus, _, scoring_tiles = get_best_yakus_for_won_hand(
                     complete_hand,
                     won_hand,
                     list(added_tiles),
@@ -107,15 +144,13 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind, self_d
                     prevalent_wind=prevalent_wind,
                     seat_wind=seat_wind,
                 )
-                scoring_cache[cache_key] = (
-                    best_yakus if best_yakus else _NO_YAKUS
-                )
-            else:
-                best_yakus = None if cached is _NO_YAKUS else cached
-            if best_yakus:
-                results.append(
-                    ((combination, residue), added_tiles, best_yakus, won_hand)
-                )
+                reachable = _reachable_acceptance(added_tiles, scoring_tiles)
+                cached = (best_yakus, reachable) if best_yakus else _NO_YAKUS
+                scoring_cache[cache_key] = cached
+            if cached is _NO_YAKUS:
+                continue
+            best_yakus, reachable = cached
+            results.append(((combination, residue), reachable, best_yakus, won_hand))
     return results
 
 
