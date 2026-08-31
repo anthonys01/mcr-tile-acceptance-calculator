@@ -46,3 +46,16 @@ def test_get_tile_to_discard_rejects_non_discardable_hand():
     assert not hand.needs_to_discard()
     with pytest.raises(AttributeError):
         get_tile_to_discard_from(hand)
+
+
+def test_wait_yakus_require_a_single_winning_tile():
+    """4568999p234567s waits on both 7p and 8p, so no wait yaku applies.
+
+    Counting Edge Wait on the 789p / 99p parsing used to push this hand to a
+    bogus 8 points, while 8p (pairing 88p next to the 999p pung) is an equally
+    valid winning tile.
+    """
+    _results, acceptance, _best, _away, _yakus = analyze_hand(
+        parse_hand("4568999p234567s")
+    )
+    assert not acceptance.get("Basic")

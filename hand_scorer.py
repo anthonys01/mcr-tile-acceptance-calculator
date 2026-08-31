@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Iterable
 
 from acceptance import get_tile_acceptance_of_groups
@@ -11,6 +12,7 @@ from mahjong_objects import (
     MahjongGroups,
     MahjongMCRYaku,
     Family,
+    INDEX_TO_TILE,
 )
 
 def get_all_tenpai_forms(
@@ -59,6 +61,121 @@ def get_acceptance(won_hand: MahjongHand) -> set[MahjongTile]:
         free_groups = set(groups).difference(declared_groups)
         acceptance.update(get_tile_acceptance_of_groups(tuple(free_groups)))
     return acceptance
+
+
+_NO_TILE_LEFT = frozenset({(0, False)})
+
+
+@lru_cache(maxsize=None)
+def _suit_full_decompositions(
+    counts: tuple[int, ...], allow_chows: bool
+) -> frozenset[tuple[int, bool]]:
+    """Enumerate the ways of consuming *all* tiles of one suit into melds and a pair.
+
+    :param counts: tile counts of the suit (9 entries, or 7 for honors)
+    :param allow_chows: False for honors, which only form pungs
+    :return: set of reachable (meld_count, has_pair) states
+    """
+    index = 0
+    size = len(counts)
+    while index < size and counts[index] == 0:
+        index += 1
+    if index == size:
+        return _NO_TILE_LEFT
+
+    results = set()
+    work = list(counts)
+    if counts[index] >= 3:
+        work[index] -= 3
+        for melds, has_pair in _suit_full_decompositions(tuple(work), allow_chows):
+            results.add((melds + 1, has_pair))
+        work[index] += 3
+    if counts[index] >= 2:
+        work[index] -= 2
+        for melds, has_pair in _suit_full_decompositions(tuple(work), allow_chows):
+            if not has_pair:
+                results.add((melds, True))
+        work[index] += 2
+    if (
+        allow_chows
+        and index + 2 < size
+        and counts[index + 1] > 0
+        and counts[index + 2] > 0
+    ):
+        work[index] -= 1
+        work[index + 1] -= 1
+        work[index + 2] -= 1
+        for melds, has_pair in _suit_full_decompositions(tuple(work), allow_chows):
+            results.add((melds + 1, has_pair))
+        work[index] += 1
+        work[index + 1] += 1
+        work[index + 2] += 1
+    return frozenset(results)
+
+
+def _is_complete(counts: list[int], needed_melds: int) -> bool:
+    """True if the count vector splits exactly into ``needed_melds`` melds and one pair."""
+    states = {(0, False)}
+    for suit in range(4):
+        offset = 9 * suit
+        suit_counts = tuple(counts[offset : offset + (7 if suit == 3 else 9)])
+        if not any(suit_counts):
+            continue
+        options = _suit_full_decompositions(suit_counts, suit != 3)
+        if not options:
+            return False
+        merged = set()
+        for melds, has_pair in states:
+            for extra_melds, extra_pair in options:
+                if has_pair and extra_pair:
+                    continue
+                total = melds + extra_melds
+                if total > needed_melds:
+                    continue
+                merged.add((total, has_pair or extra_pair))
+        if not merged:
+            return False
+        states = merged
+    return (needed_melds, True) in states
+
+
+@lru_cache(maxsize=None)
+def get_tenpai_acceptance(
+    free_tiles: tuple[MahjongTile, ...], free_group_count: int
+) -> frozenset[MahjongTile]:
+    """Compute the complete wait of a tenpai hand from its free (non-declared) tiles.
+
+    Every decomposition of the free tiles is considered, so waits coming from
+    alternative parsings of the same tiles are all reported. This is what the
+    wait-shape yakus (edge / closed / single wait) must be checked against: they
+    only apply when the hand has a single winning tile overall, not when one
+    particular arrangement happens to be one-sided.
+
+    :param free_tiles: the concealed tiles of the tenpai hand
+    :param free_group_count: number of non-declared, non-pair groups to form
+    :return: the set of tiles the hand can win on
+    """
+    counts = [0] * 34
+    for tile in free_tiles:
+        counts[tile.index] += 1
+
+    candidates = set()
+    for tile in free_tiles:
+        index = tile.index
+        candidates.add(index)
+        if index < 27:
+            number = index % 9
+            for delta in (-2, -1, 1, 2):
+                if 0 <= number + delta <= 8:
+                    candidates.add(index + delta)
+
+    acceptance = set()
+    for index in candidates:
+        counts[index] += 1
+        if _is_complete(counts, free_group_count):
+            acceptance.add(INDEX_TO_TILE[index])
+        counts[index] -= 1
+    return frozenset(acceptance)
 
 
 def _context_from_base(

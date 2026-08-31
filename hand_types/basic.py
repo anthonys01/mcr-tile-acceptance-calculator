@@ -1,8 +1,8 @@
-from functools import cache, reduce
+from functools import cache, partial, reduce
 from itertools import product
 
-from group_finder import all_groups_for, find_simple_waits_for_two_tiles
-from hand_scorer import get_best_yakus_for_won_hand
+from group_finder import all_groups_for
+from hand_scorer import get_best_yakus_for_won_hand, get_tenpai_acceptance
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongGroup, MahjongTile
 from tiles_utils import parse_hand
 
@@ -28,29 +28,28 @@ def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
 
 
 def _compute_acceptance_for_winning_tile(
-    won_hand, winning_tile: MahjongTile
+    won_hand, winning_tile: MahjongTile, declared_groups: tuple[MahjongGroup, ...] = ()
 ) -> set[MahjongTile]:
-    """Derive the tenpai acceptance set for a specific winning tile in a complete won_hand.
+    """Derive the complete tenpai acceptance set of ``won_hand`` minus ``winning_tile``.
 
-    Finds the group that contains winning_tile, removes one instance to obtain the
-    proto-group, then returns the tiles that complete it:
-    - 2-tile proto (chow/pung partial): delegated to find_simple_waits_for_two_tiles
-    - 1-tile proto (tanki / pair wait): the tile itself
+    The wait must be computed on the whole tenpai hand, not just on the group the
+    winning tile belongs to: the very same tiles can often be re-parsed into other
+    proto-groups accepting other tiles. Wait-shape yakus (edge/closed/single wait)
+    only apply when the hand waits on a single tile overall.
     """
+    remaining = list(declared_groups)
+    free_tiles = []
     for group in won_hand:
-        if winning_tile in group:
-            proto = list(group)
-            proto.remove(winning_tile)
-            if len(proto) == 2:
-                p0, p1 = proto
-                # Honor tiles cannot form sequences; a pair of different honor tiles has no wait
-                if p0 != p1 and p0.is_honor():
-                    return set()
-                return find_simple_waits_for_two_tiles(tuple(proto))
-            elif len(proto) == 1:
-                return {proto[0]}
-            return set()
-    return set()
+        if group in remaining:
+            remaining.remove(group)
+            continue
+        free_tiles.extend(group)
+    if winning_tile not in free_tiles:
+        return set()
+    free_tiles.remove(winning_tile)
+    return get_tenpai_acceptance(
+        tuple(sorted(free_tiles)), 4 - len(declared_groups)
+    )
 
 
 _NO_YAKUS = object()
@@ -82,6 +81,9 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
     # ``combination``/``residue`` are still emitted as separate results (they
     # matter for discard selection), only the expensive scoring is shared.
     scoring_cache: dict = {}
+    acceptance_for_winning_tile = partial(
+        _compute_acceptance_for_winning_tile, declared_groups=tuple(declared_groups)
+    )
     for combination, residue in fastest_hands:
         if len(residue) > 5:
             continue
@@ -96,7 +98,7 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
                     complete_hand,
                     won_hand,
                     list(added_tiles),
-                    _compute_acceptance_for_winning_tile,
+                    acceptance_for_winning_tile,
                     prevalent_wind=prevalent_wind,
                     seat_wind=seat_wind,
                 )

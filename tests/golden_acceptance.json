@@ -2702,9 +2702,7 @@
       ],
       "acceptance_by_type": {
         "Basic": [
-          "2p",
           "5m",
-          "5p",
           "7p",
           "8m"
         ],
