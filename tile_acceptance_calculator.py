@@ -201,9 +201,13 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles, candidates_occ
     return sorted(best_candidates, key=lambda tile: abs(5 - tile.number))[-1]
 
 
-def _print_best_discard_choice(best_results, results, acceptance, hand):
+def _print_best_discard_choice(best_results, results, acceptance, hand, basic_yakus=None,
+                               prevalent_wind=0, seat_wind=0):
     best_discard_tile, acceptance_after_discard, acceptance_nb, _by_type = (
-        _get_best_discard_choice(best_results, results, acceptance, hand)
+        _get_best_discard_choice(
+            best_results, results, acceptance, hand, basic_yakus,
+            prevalent_wind, seat_wind,
+        )
     )
     return f"Tile to discard next: {best_discard_tile} (acceptance: {sorted(acceptance_after_discard)} -> {acceptance_nb} tiles)\n"
 
@@ -313,8 +317,91 @@ def _build_discard_candidates(
     return candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence
 
 
+def _rank_candidates(
+    candidate_acceptance,
+    candidate_type_occurrence,
+    best_results,
+    results,
+    acceptance,
+    hand: MahjongHand,
+    basic_yakus,
+    prevalent_wind,
+    seat_wind,
+):
+    """Score every candidate discard and return ``(scores, recommended_tile)``.
+
+    Candidates are scored with the composite metric of :mod:`discard_ranking`
+    (value-weighted, multi-hand-type, self-draw aware), which sees things raw
+    immediate acceptance is blind to: the value of the routes a discard keeps
+    open, how many hand types stay reachable, and shapes that only reach the
+    8-point minimum on a self-draw.
+
+    The recommendation stays conservative: the acceptance-maximising tile (legacy
+    behaviour, with the legacy "most useless tile" tiebreak) is only replaced when
+    another candidate beats it by more than ``SCORE_MARGIN``. Raw acceptance is a
+    low-variance signal, so near-ties - symmetric waits, interchangeable discards -
+    keep the historical answer instead of flipping on scoring noise.
+    """
+    # Imported lazily: discard_ranking is a consumer of this module's concepts.
+    from discard_ranking import SCORE_MARGIN, score_discards
+
+    scores, _breakdown = score_discards(
+        hand,
+        results,
+        acceptance,
+        best_results,
+        basic_yakus,
+        prevalent_wind=prevalent_wind,
+        seat_wind=seat_wind,
+        candidates=set(candidate_acceptance),
+    )
+    for tile in candidate_acceptance:
+        scores.setdefault(tile, 0.0)
+
+    def _pick(tiles):
+        return _get_most_useless_tile_from(tiles, candidate_type_occurrence)
+
+    # Legacy baseline: maximum immediate acceptance, useless-tile tiebreak.
+    best_acceptance = max(
+        _get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values()
+    )
+    baseline = _pick(
+        [
+            tile
+            for tile, acc in candidate_acceptance.items()
+            if _get_acceptance_tile_number(hand, acc) == best_acceptance
+        ]
+    )
+
+    best_score = max(scores.values())
+    best_tiles = [tile for tile, score in scores.items() if score == best_score]
+    if len(best_tiles) > 1:
+        top_acceptance = max(
+            _get_acceptance_tile_number(hand, candidate_acceptance[tile])
+            for tile in best_tiles
+        )
+        best_tiles = [
+            tile
+            for tile in best_tiles
+            if _get_acceptance_tile_number(hand, candidate_acceptance[tile])
+            == top_acceptance
+        ]
+    challenger = _pick(best_tiles)
+
+    baseline_score = scores.get(baseline, 0.0)
+    if challenger is baseline or best_score <= baseline_score * (1 + SCORE_MARGIN):
+        return scores, baseline
+    return scores, challenger
+
+
 def _get_best_discard_choice(
-    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+    best_results,
+    results,
+    acceptance,
+    hand: MahjongHand,
+    basic_yakus=None,
+    prevalent_wind=0,
+    seat_wind=0,
 ):
     candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
         _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
@@ -323,32 +410,42 @@ def _get_best_discard_choice(
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
 
-    # Comparer par nombre de tuiles acceptées (après union)
-    best_score = max(
-        _get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values()
+    _scores, to_discard = _rank_candidates(
+        candidate_acceptance,
+        candidate_type_occurrence,
+        best_results,
+        results,
+        acceptance,
+        hand,
+        basic_yakus,
+        prevalent_wind,
+        seat_wind,
     )
-    best_tiles = [
-        tile
-        for tile, acc in candidate_acceptance.items()
-        if _get_acceptance_tile_number(hand, acc) == best_score
-    ]
-    to_discard = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
     return (
         to_discard,
         candidate_acceptance[to_discard],
-        best_score,
+        _get_acceptance_tile_number(hand, candidate_acceptance[to_discard]),
         dict(candidate_acceptance_by_type[to_discard]),
     )
 
 
 def get_discard_choices(
-    best_results, results, acceptance, hand: MahjongHand, basic_yakus=None
+    best_results,
+    results,
+    acceptance,
+    hand: MahjongHand,
+    basic_yakus=None,
+    prevalent_wind=0,
+    seat_wind=0,
 ):
-    """Rank every discardable tile from best (most acceptance) to worst.
+    """Rank every discardable tile from best to worst.
 
     Each entry is ``(tile, acceptance_set, acceptance_count, acceptance_by_type,
-    is_recommended)``. The recommended flag marks the single tile that
-    ``_get_best_discard_choice`` would pick (top score, useless-tile tiebreak).
+    is_recommended, score)``. Ordering uses the composite
+    :mod:`discard_ranking` score (value-weighted, multi-hand-type, self-draw
+    aware) rather than the raw acceptance count, which stays in the tuple for
+    display. The recommended flag marks the single tile that
+    ``_get_best_discard_choice`` would pick.
     """
     candidate_acceptance, candidate_acceptance_by_type, candidate_type_occurrence = (
         _build_discard_candidates(best_results, results, acceptance, hand, basic_yakus)
@@ -357,19 +454,23 @@ def get_discard_choices(
     if not candidate_acceptance:
         raise ValueError("No tile to discard")
 
-    best_score = max(
-        _get_acceptance_tile_number(hand, acc) for acc in candidate_acceptance.values()
+    scores, recommended = _rank_candidates(
+        candidate_acceptance,
+        candidate_type_occurrence,
+        best_results,
+        results,
+        acceptance,
+        hand,
+        basic_yakus,
+        prevalent_wind,
+        seat_wind,
     )
-    best_tiles = [
-        tile
-        for tile, acc in candidate_acceptance.items()
-        if _get_acceptance_tile_number(hand, acc) == best_score
-    ]
-    recommended = _get_most_useless_tile_from(best_tiles, candidate_type_occurrence)
 
     ranked = sorted(
         candidate_acceptance,
         key=lambda tile: (
+            tile is not recommended,
+            -scores.get(tile, 0.0),
             -_get_acceptance_tile_number(hand, candidate_acceptance[tile]),
             tile.index,
         ),
@@ -384,6 +485,7 @@ def get_discard_choices(
                 _get_acceptance_tile_number(hand, acc),
                 dict(candidate_acceptance_by_type[tile]),
                 tile is recommended,
+                round(scores.get(tile, 0.0), 2),
             )
         )
     return choices
@@ -567,7 +669,9 @@ def get_tile_to_discard_from(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
         hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
     return (
-        _get_best_discard_choice(best_results, results, acceptance, hand, yakus),
+        _get_best_discard_choice(
+            best_results, results, acceptance, hand, yakus, prevalent_wind, seat_wind
+        ),
         nb_away - 1,
         best_results,
         yakus,
@@ -592,12 +696,14 @@ def analyze_hand_from_string_and_print(
         mahjong_hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
     return _print_hand_analysis(
-        mahjong_hand, results, acceptance, best_results, display_all, basic_yakus
+        mahjong_hand, results, acceptance, best_results, display_all, basic_yakus,
+        prevalent_wind, seat_wind,
     )
 
 
 def _print_hand_analysis(
-    hand, results, acceptance, best_results, display_all, basic_yakus
+    hand, results, acceptance, best_results, display_all, basic_yakus,
+    prevalent_wind=0, seat_wind=0,
 ) -> str:
     to_display = results.keys() if display_all else best_results
     to_display = sorted(to_display, key=lambda t: len(results[t][0][1]))
@@ -605,7 +711,8 @@ def _print_hand_analysis(
     if hand.needs_to_discard():
         printed_result += "-----------------------------\n"
         printed_result += _print_best_discard_choice(
-            best_results, results, acceptance, hand
+            best_results, results, acceptance, hand, basic_yakus,
+            prevalent_wind, seat_wind,
         )
     else:
         printed_result += "-----------------------------\n"
@@ -741,7 +848,8 @@ def analyze_hand_structured(
     if hand.needs_to_discard():
         try:
             choices = get_discard_choices(
-                best_results, results, acceptance, hand, basic_yakus
+                best_results, results, acceptance, hand, basic_yakus,
+                prevalent_wind, seat_wind,
             )
         except ValueError:
             choices = []
@@ -750,13 +858,14 @@ def analyze_hand_structured(
                 "tile": str(tile),
                 "acceptance": sorted(str(accepted) for accepted in acc),
                 "acceptance_count": count,
+                "score": score,
                 "recommended": recommended,
                 "by_type": {
                     label: sorted(str(accepted) for accepted in tiles)
                     for label, tiles in by_type.items()
                 },
             }
-            for tile, acc, count, by_type, recommended in choices
+            for tile, acc, count, by_type, recommended, score in choices
         ]
         data["away_after_discard"] = max(closest_away - 1, 0)
     else:

@@ -720,6 +720,13 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
         }
         line1.appendChild(el("span", "badge count", d.acceptance_count + " tiles accepted"));
         line1.appendChild(el("span", "badge", d.acceptance.length + " kinds"));
+        if (d.score !== undefined) {
+          const score = el("span", "badge", "score " + d.score);
+          score.title = "Composite ranking score: acceptance weighted by hand value, "
+            + "by every hand type the discard keeps reachable, and by routes that only "
+            + "reach 8 points on a self-draw.";
+          line1.appendChild(score);
+        }
         meta.appendChild(line1);
         meta.appendChild(typeTags(Object.keys(d.by_type)));
         head.appendChild(meta);
@@ -1039,7 +1046,7 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
     // ---------- Pyodide ----------
     async function init() {
       const pyodide = await loadPyodide();
-      const pyFiles = ['tile_acceptance_calculator.py','tiles_utils.py', 'acceptance.py',
+      const pyFiles = ['tile_acceptance_calculator.py','tiles_utils.py', 'acceptance.py', 'discard_ranking.py', 'shanten_oracle.py',
         'pattern_generator.py','group_finder.py','mahjong_objects.py','mahjong_core.py','mahjong_hand.py','mahjong_context.py','mahjong_yaku.py','mcr_scorer.py','hand_scorer.py',
         'hand_types/__init__.py','hand_types/all_pungs.py','hand_types/all_types.py','hand_types/common.py','hand_types/basic.py',
         'hand_types/knitted.py','hand_types/precompute.py','hand_types/seven_pairs.py','hand_types/three_group_pattern.py'];

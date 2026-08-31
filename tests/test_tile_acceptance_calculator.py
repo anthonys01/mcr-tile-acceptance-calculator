@@ -17,7 +17,11 @@ import pytest
 
 from mahjong_objects import MahjongHand
 from tests.snapshot_util import SNAPSHOT_HANDS, snapshot_for_hand
-from tile_acceptance_calculator import analyze_hand, get_tile_to_discard_from
+from tile_acceptance_calculator import (
+    analyze_hand,
+    get_discard_choices,
+    get_tile_to_discard_from,
+)
 from tiles_utils import parse_hand
 
 _GOLDEN_PATH = os.path.join(os.path.dirname(__file__), "golden_acceptance.json")
@@ -59,3 +63,41 @@ def test_wait_yakus_require_a_single_winning_tile():
         parse_hand("4568999p234567s")
     )
     assert not acceptance.get("Basic")
+
+
+def test_discard_ranking_prefers_value_over_raw_acceptance():
+    """5m456899p2345679s: raw acceptance says 5m, the better discard is 8p.
+
+    Discarding 5m accepts 22 tiles against 19 for 8p, but every 5m route tops out
+    at exactly 8 points, while keeping 5m (i.e. discarding 8p) keeps Mixed Shifted
+    Chows and Triple Chows reachable and opens manzu chows that are legal 8-point
+    hands on a self-draw. Monte-Carlo rollouts agree with 8p.
+    """
+    hand = parse_hand("5m456899p2345679s")
+    results, acceptance, best_results, _away, yakus = analyze_hand(hand)
+    choices = get_discard_choices(best_results, results, acceptance, hand, yakus)
+
+    by_tile = {str(tile): choice for choice in choices for tile in [choice[0]]}
+    assert by_tile["5m"][2] > by_tile["8p"][2], "5m must still win on raw acceptance"
+    assert by_tile["8p"][5] > by_tile["5m"][5], "8p must win on the composite score"
+    assert str(choices[0][0]) == "8p"
+    assert choices[0][4] is True
+
+
+def test_discard_ranking_keeps_completed_group():
+    """13m35679s24567p55z: raw acceptance says 6s, the better discard is 7p.
+
+    Discarding 6s accepts 16 tiles against 15 for 7p, but no MCR blueprint uses
+    the completed 567s chow, so breaking it looks free to them while it collapses
+    the general-purpose ukeire from 52 tiles to 20. Monte-Carlo rollouts rank 7p
+    first (28.7% win rate against 24.0% for 6s).
+    """
+    hand = parse_hand("13m35679s24567p55z")
+    results, acceptance, best_results, _away, yakus = analyze_hand(hand)
+    choices = get_discard_choices(best_results, results, acceptance, hand, yakus)
+
+    by_tile = {str(tile): choice for choice in choices for tile in [choice[0]]}
+    assert by_tile["6s"][2] > by_tile["7p"][2], "6s must still win on raw acceptance"
+    assert by_tile["7p"][5] > by_tile["6s"][5], "7p must win on the composite score"
+    assert str(choices[0][0]) == "7p"
+    assert choices[0][4] is True

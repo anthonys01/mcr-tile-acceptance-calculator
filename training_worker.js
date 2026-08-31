@@ -10,7 +10,7 @@ let pyodide = null;
 const APP_VERSION = "2026-07-24-1";
 
 const PY_FILES = [
-  'training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py',
+  'training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py', 'discard_ranking.py', 'shanten_oracle.py',
   'acceptance.py', 'pattern_generator.py', 'group_finder.py', 'mahjong_objects.py', 'mahjong_core.py', 'mahjong_hand.py', 'mahjong_context.py', 'mahjong_yaku.py', 'mcr_scorer.py', 'hand_scorer.py',
   'hand_types/__init__.py', 'hand_types/all_pungs.py', 'hand_types/all_types.py', 'hand_types/common.py',
   'hand_types/basic.py', 'hand_types/knitted.py', 'hand_types/precompute.py', 'hand_types/seven_pairs.py',

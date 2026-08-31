@@ -7,19 +7,23 @@ from mahjong_objects import MahjongHand, MahjongCombination, MahjongGroup, Mahjo
 from tiles_utils import parse_hand
 
 
-def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
+def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0, self_drawn=False):
     """Try to construct the fastest 8-point hand following basic acceptance
 
     Only return result hands when the final point count of the hand is 8 or more, for a basic hand at least 5-shanten
     :param hand: Mahjong hand
     :param prevalent_wind: prevalent wind (1-4) or 0 if unknown
     :param seat_wind: seat wind (1-4) or 0 if unknown
+    :param self_drawn: score the candidate completions as self-draw wins (Fully
+        Concealed Hand instead of Concealed Hand, +2 points for a closed hand).
+        Some shapes only reach the 8-point minimum when self-drawn, so this
+        widens the acceptance; see ``discard_ranking``.
     """
     acceptance = set()
     possible_hands = []
     kept_yakus = []
     for comb, added_tiles, yakus, won_hand in _get_all_possible_yakus(
-        hand, prevalent_wind, seat_wind
+        hand, prevalent_wind, seat_wind, self_drawn
     ):
         possible_hands.append(comb)
         kept_yakus.append((won_hand, yakus))
@@ -55,7 +59,7 @@ def _compute_acceptance_for_winning_tile(
 _NO_YAKUS = object()
 
 
-def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
+def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind, self_drawn=False):
     fastest_hands = []
     best_shanten = 13
     declared_groups = hand.get_all_declared_groups()
@@ -99,6 +103,7 @@ def _get_all_possible_yakus(hand: MahjongHand, prevalent_wind, seat_wind):
                     won_hand,
                     list(added_tiles),
                     acceptance_for_winning_tile,
+                    self_drawn=self_drawn,
                     prevalent_wind=prevalent_wind,
                     seat_wind=seat_wind,
                 )

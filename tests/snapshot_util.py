@@ -39,6 +39,12 @@ SNAPSHOT_HANDS = [
     "1112345678999m",         # nine gates shape
     "112233m112233p11s",      # triple/mixed chows shape
     "19m19p19s1234567z",      # thirteen orphans shape
+    # --- discard-ranking regression: raw acceptance prefers 5m (22 tiles) but
+    # 8p (19 tiles) keeps Mixed Shifted alive and is what rollouts recommend ---
+    "5m456899p2345679s",
+    # --- discard-ranking regression: raw acceptance prefers 6s (16 tiles) but
+    # discarding it breaks the made 567s chow; 7p (15 tiles) is the rollout pick ---
+    "13m35679s24567p55z",
 ]
 
 
