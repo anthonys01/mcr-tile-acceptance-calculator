@@ -86,7 +86,7 @@ from acceptance import (
 from hand_scorer import get_total_points
 from hand_types.basic import can_construct_hand
 from mahjong_objects import MahjongHand, MahjongTile
-from shanten_oracle import counts_from_tiles, standard_shanten
+from shanten_oracle import counts_from_tiles, shanten as _oracle_shanten
 
 # Guaranteed base MCR point value of each structural hand type (the minimum the
 # type is worth; completed hands often score more through extra yakus).
@@ -113,14 +113,21 @@ _KNITTED = "Knitted"
 ALPHA = float(os.environ.get("MCR_RANK_ALPHA", "0.5"))
 # Per-extra-tile-away discount applied to a hand type's contribution (proxy for
 # the probability of ever completing that type from this distance).
-DECAY = float(os.environ.get("MCR_RANK_DECAY", "0.15"))
+DECAY = float(os.environ.get("MCR_RANK_DECAY", "0.40"))
 # Value saturation: a legal MCR win only needs 8 points, so extra value is capped
 # before weighting.
 VALUE_CAP = float(os.environ.get("MCR_RANK_VALUE_CAP", "12"))
 # Credit given to acceptance tiles that only reach 8 points when self-drawn.
-# Below 1 because those routes cannot be ronned, but not much below: a self-draw
-# is how most concealed MCR hands actually finish.
-TSUMO_WEIGHT = float(os.environ.get("MCR_RANK_TSUMO_WEIGHT", "0.8"))
+# Disabled (0) after measurement: `_self_draw_only_acceptance` can only widen the
+# *Basic* pool - the pattern hand types are legal by construction and gain nothing
+# from it - so across candidates it is a systematic bonus for whichever discard
+# happens to be closest through Basic, not a property of the self-draw itself. On
+# `134789m12345p599s` it was worth +15.84 to `4m`/`5s` for that reason alone. The
+# win-mode asymmetry it was introduced for is already handled where it belongs, by
+# the `self_drawn` flag threaded through `hand_types.basic.can_construct_hand`.
+# Kept as a knob so the term can be re-enabled once it can be computed for every
+# hand type rather than for Basic alone.
+TSUMO_WEIGHT = float(os.environ.get("MCR_RANK_TSUMO_WEIGHT", "0.0"))
 # Point value attributed to a self-draw-only route (it is, by construction, below
 # the 8-point ron threshold).
 TSUMO_ONLY_VALUE = 8.0
@@ -135,13 +142,13 @@ SCORE_MARGIN = float(os.environ.get("MCR_RANK_MARGIN", "0.15"))
 ROUTE_DECAY = float(os.environ.get("MCR_RANK_ROUTE_DECAY", "0.45"))
 # Exponent of the shape factor (yaku-agnostic ukeire of the remaining 13 tiles).
 # 0 disables the shape correction.
-SHAPE_GAMMA = float(os.environ.get("MCR_RANK_SHAPE_GAMMA", "0.3"))
+SHAPE_GAMMA = float(os.environ.get("MCR_RANK_SHAPE_GAMMA", "1.6"))
 # Per-shanten discount applied to the raw ukeire before it is used as a shape
 # factor. Raw ukeire grows with the distance to a win - a 2-shanten hand simply
 # has more improving tiles than a 1-shanten one - so comparing it directly would
 # reward being *further* from completing. Roughly the fraction of that width that
 # survives one more step.
-SHAPE_STEP = float(os.environ.get("MCR_RANK_SHAPE_STEP", "0.5"))
+SHAPE_STEP = float(os.environ.get("MCR_RANK_SHAPE_STEP", "0.20"))
 # Ukeire of a good 1-shanten hand: the reference the shape factor is measured
 # against. Only sets the scale of the factor (a common multiplier cannot change
 # the ranking), so it needs no tuning.
@@ -183,24 +190,30 @@ def _value_weight(points: float) -> float:
 
 
 @lru_cache(maxsize=None)
-def _shape_ukeire(counts_t: tuple) -> tuple:
+def _shape_ukeire(counts_t: tuple, melds_declared: int = 0) -> tuple:
     """Yaku-agnostic shape of a 13-tile multiset, as ``(shanten, ukeire)``.
 
-    ``ukeire`` is the number of live tiles that lower the *standard* shanten,
-    ignoring MCR legality entirely. It measures how many ways the hand can still
-    improve whatever pattern it ends up in, which is exactly the flexibility the
-    MCR blueprints cannot express: a blueprint only describes the tiles it uses,
-    so a complete chow it happens not to need looks free to break.
+    ``ukeire`` is the number of live tiles that lower the shanten, ignoring MCR
+    legality entirely. It measures how many ways the hand can still improve
+    whatever pattern it ends up in, which is exactly the flexibility the MCR
+    blueprints cannot express: a blueprint only describes the tiles it uses, so a
+    complete chow it happens not to need looks free to break.
+
+    The shanten is the best over *every* winning family (standard, seven pairs,
+    kokushi, both knitted shapes), not just the standard one. Measuring a knitted
+    hand on the standard yardstick reports it as hopelessly far from a win and,
+    once the per-shanten discount is steep, annihilates its score - even though
+    the knitted route it is actually pursuing may be nearly complete.
     """
     counts = list(counts_t)
-    reference = standard_shanten(counts)
+    reference = _oracle_shanten(counts, melds_declared)
     total = 0
     for index in range(34):
         seen = counts[index]
         if seen >= _FULL_COPIES:
             continue
         counts[index] = seen + 1
-        if standard_shanten(counts) < reference:
+        if _oracle_shanten(counts, melds_declared) < reference:
             total += _FULL_COPIES - seen
         counts[index] = seen
     return reference, total
@@ -220,7 +233,8 @@ def _shape_factor(hand: MahjongHand, tile: MahjongTile) -> float:
     counts = counts_from_tiles(hand.get_free_tiles())
     if counts[tile.index]:
         counts[tile.index] -= 1
-    shanten, ukeire = _shape_ukeire(tuple(counts))
+    melds = len(hand.get_all_declared_groups())
+    shanten, ukeire = _shape_ukeire(tuple(counts), melds)
     reference = SHAPE_REF_UKEIRE * SHAPE_STEP
     score = ukeire * SHAPE_STEP**shanten
     return (score / reference) ** SHAPE_GAMMA
@@ -329,12 +343,18 @@ def score_discards(
                         per_tile_basic_points[tile], basic_points
                     )
 
-    self_draw_only = _self_draw_only_acceptance(
-        hand,
-        candidates,
-        {tile: accs.get(_BASIC, set()) for tile, accs in per_tile_acc.items()},
-        prevalent_wind,
-        seat_wind,
+    # Re-running `can_construct_hand` per candidate is the single most expensive
+    # step in the scorer, so skip it entirely when the term is switched off.
+    self_draw_only = (
+        _self_draw_only_acceptance(
+            hand,
+            candidates,
+            {tile: accs.get(_BASIC, set()) for tile, accs in per_tile_acc.items()},
+            prevalent_wind,
+            seat_wind,
+        )
+        if TSUMO_WEIGHT
+        else {}
     )
 
     scores: dict[MahjongTile, float] = {}
