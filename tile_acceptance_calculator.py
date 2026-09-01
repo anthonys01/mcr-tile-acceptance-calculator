@@ -7,7 +7,10 @@ from collections import defaultdict
 from enum import Enum
 from typing import Iterable
 
-from acceptance import get_tile_acceptance_of_groups
+from acceptance import (
+    get_tile_acceptance_of_groups,
+    get_tile_acceptance_of_knitted_groups,
+)
 from hand_types.all_pungs import can_construct_all_pungs
 from hand_types.all_types import can_construct_all_types
 from hand_types.basic import can_construct_hand
@@ -356,6 +359,13 @@ def _build_discard_candidates(
                 elif best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4:
                     # with honors
                     useful_acceptance = set(acceptance_pool)
+                elif best_result == HandType.KNITTED.value:
+                    # knitted straight: the leading groups are knitted triples,
+                    # which the standard wait finder cannot read (see
+                    # get_tile_acceptance_of_knitted_groups)
+                    useful_acceptance = get_tile_acceptance_of_knitted_groups(
+                        combi
+                    ).intersection(acceptance_pool)
                 else:
                     hand_full_acceptance = get_tile_acceptance_of_groups(combi)
                     useful_acceptance = hand_full_acceptance.intersection(

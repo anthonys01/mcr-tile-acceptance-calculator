@@ -69,6 +69,54 @@ def get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
     return acceptance
 
 
+KNITTED_GROUP_COUNT = 3
+
+
+def get_tile_acceptance_of_knitted_groups(
+        groups: MahjongGroups, knitted_group_count: int = KNITTED_GROUP_COUNT
+) -> set[MahjongTile]:
+    """Tile acceptance of a knitted-straight combination.
+
+    The first ``knitted_group_count`` groups of such a combination are knitted
+    proto-groups: the tiles held out of one ``{n, n+3, n+6}`` triple of a single
+    family. :func:`get_tile_acceptance_of_groups` only understands *standard*
+    shapes, so it reads ``(2s, 8s)`` as a two-tile group with no simple wait and
+    credits it nothing - which is why knitted discards were displayed with an
+    empty acceptance. Here each incomplete triple accepts the tiles it still
+    misses.
+
+    The remaining groups are ordinary - the chow and the pair completing the
+    knitted straight, plus any declared group - and keep the standard treatment.
+    Knitted proto-groups are never pairs, so splitting them off does not perturb
+    the pair bookkeeping of the standard pass.
+    """
+    acceptance = set()
+    for group in groups[:knitted_group_count]:
+        acceptance.update(_knitted_waits(group))
+    acceptance.update(get_tile_acceptance_of_groups(groups[knitted_group_count:]))
+    return acceptance
+
+
+def _knitted_waits(group: MahjongGroup) -> set[MahjongTile]:
+    """Tiles missing from the knitted triple ``group`` belongs to.
+
+    A tile's number identifies its triple unambiguously (``1/4/7``, ``2/5/8`` or
+    ``3/6/9``), so a partial group of any size determines the tiles it still
+    needs. An empty group carries no family and accepts nothing;
+    :func:`get_full_tile_acceptance` covers that case through ``allowed_tiles``.
+    """
+    if not group:
+        return set()
+    family = group[0].family
+    start = (group[0].number - 1) % 3 + 1
+    held = {tile.number for tile in group}
+    return {
+        MahjongTile(number=number, family=family)
+        for number in (start, start + 3, start + 6)
+        if number not in held
+    }
+
+
 def _has_empty_group(groups):
     return any(len(group) == 0 for group in groups)
 

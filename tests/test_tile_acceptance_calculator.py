@@ -16,6 +16,7 @@ import os
 import pytest
 
 from mahjong_objects import MahjongHand
+from acceptance import _knitted_waits
 from hand_types.basic import _reachable_acceptance
 from tests.snapshot_util import SNAPSHOT_HANDS, snapshot_for_hand
 from tile_acceptance_calculator import (
@@ -122,6 +123,37 @@ def test_acceptance_excludes_tiles_that_break_the_winning_wait():
     by_tile = {str(choice[0]): choice for choice in choices}
     for tile in ("4m", "5s"):
         assert {str(t) for t in by_tile[tile][1]} == {"6p"}
+
+
+def test_knitted_discards_report_their_acceptance():
+    """147m28899s334566p: knitted discards must not show an empty acceptance.
+
+    The combination is (1m4m7m)(2s8s)(3p6p)(3p4p5p)(9s9s) with 8s and 6p left
+    over. The leading groups are knitted proto-groups - the tiles held out of a
+    {n, n+3, n+6} triple - which the standard wait finder cannot read: it sees
+    (2s, 8s) as a two-tile group with no simple wait and credits it nothing. All
+    three knitted discards were therefore displayed as accepting 0 tiles.
+    """
+    hand = parse_hand("147m28899s334566p")
+    results, acceptance, best_results, _away, yakus = analyze_hand(hand)
+    assert best_results == ["Knitted"]
+    assert {str(tile) for tile in acceptance["Knitted"]} == {"5s", "9p"}
+
+    choices = get_discard_choices(best_results, results, acceptance, hand, yakus)
+    by_tile = {str(choice[0]): choice for choice in choices}
+    for tile in ("3p", "6p", "8s"):
+        assert {str(t) for t in by_tile[tile][1]} == {"5s", "9p"}, tile
+        assert by_tile[tile][2] == 8, tile
+
+
+def test_knitted_waits_completes_the_triple():
+    """A partial knitted group accepts exactly the tiles missing from its triple."""
+    two_sou, five_sou, eight_sou = parse_hand("258s").get_free_tiles()
+    assert _knitted_waits((two_sou, eight_sou)) == {five_sou}
+    assert _knitted_waits((five_sou,)) == {two_sou, eight_sou}
+    assert _knitted_waits((two_sou, five_sou, eight_sou)) == set()
+    # an empty group carries no family, so it cannot name any tile
+    assert _knitted_waits(()) == set()
 
 
 def test_reachable_acceptance_keeps_single_missing_tile():

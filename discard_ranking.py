@@ -79,7 +79,10 @@ import os
 from collections import defaultdict
 from functools import lru_cache
 
-from acceptance import get_tile_acceptance_of_groups
+from acceptance import (
+    get_tile_acceptance_of_groups,
+    get_tile_acceptance_of_knitted_groups,
+)
 from hand_scorer import get_total_points
 from hand_types.basic import can_construct_hand
 from mahjong_objects import MahjongHand, MahjongTile
@@ -168,6 +171,10 @@ def useful_acceptance_for_tile(
     if hand_type == _KNITTED and len(results[0][0]) == 4:
         # knitted-with-honors combos expose the whole pool
         return set(acceptance_pool)
+    if hand_type == _KNITTED:
+        return get_tile_acceptance_of_knitted_groups(combi).intersection(
+            acceptance_pool
+        )
     return get_tile_acceptance_of_groups(combi).intersection(acceptance_pool)
 
 
