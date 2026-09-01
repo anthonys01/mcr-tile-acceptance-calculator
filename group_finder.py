@@ -45,6 +45,10 @@ def find_simple_waits_for_two_tiles(group: MahjongGroup) -> set[MahjongTile]:
     waits = set()
     if tile1 == tile2:
         waits.add(tile1)
+    elif tile1.family != tile2.family or tile1.is_honor():
+        # no sequence across families nor with honors: two distinct such tiles
+        # can never be completed into a group
+        return waits
     elif tile2.number - tile1.number == 1:
         if tile1.number > 1:
             waits.add(MahjongTile(number=tile1.number - 1, family=tile1.family))

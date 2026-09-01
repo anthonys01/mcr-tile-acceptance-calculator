@@ -7,7 +7,7 @@ let pyodide = null;
 
 // Bump on every release so browsers re-fetch the Python sources instead of
 // serving stale cached copies. Keep in sync with training.html's worker URL.
-const APP_VERSION = "2026-07-24-1";
+const APP_VERSION = "2026-09-01-1";
 
 const PY_FILES = [
   'training_engine.py', 'tile_acceptance_calculator.py', 'tiles_utils.py', 'discard_ranking.py', 'shanten_oracle.py',

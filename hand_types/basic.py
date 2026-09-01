@@ -198,7 +198,9 @@ def _complete_proto_group(proto_group: MahjongGroup):
         tile_1, tile_2 = proto_group
         if tile_1 == tile_2:
             results.append(([(tile_1, tile_1, tile_1)], [tile_1]))
-        else:
+        elif tile_1.family == tile_2.family and not tile_1.is_honor():
+            # honors (and tiles of different families) have no sequence, so two
+            # distinct such tiles can never be completed into a group
             smallest_tile = min(tile_1, tile_2)
             biggest_tile = max(tile_1, tile_2)
             if biggest_tile.number - smallest_tile.number == 2:
@@ -241,6 +243,9 @@ def _complete_proto_group(proto_group: MahjongGroup):
         plus_1 = None
         plus_2 = None
         tile = proto_group[0]
+        if tile.is_honor():
+            # no sequence with honors: the only completion is the triplet
+            return [([(tile, tile, tile)], [tile, tile])]
         if tile.number >= 2:
             minus_1 = MahjongTile(number=tile.number - 1, family=tile.family)
         if tile.number >= 3:

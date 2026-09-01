@@ -21,6 +21,7 @@ from hand_types.basic import _reachable_acceptance
 from tests.snapshot_util import SNAPSHOT_HANDS, snapshot_for_hand
 from tile_acceptance_calculator import (
     analyze_hand,
+    analyze_hand_structured,
     get_discard_choices,
     get_tile_to_discard_from,
 )
@@ -168,3 +169,28 @@ def test_reachable_acceptance_keeps_single_missing_tile():
     # a duplicate scoring tile can be drawn first, the second copy still wins
     assert _reachable_acceptance([two_man, two_man], (two_man,)) == (two_man,)
     assert _reachable_acceptance([two_man, six_pin], ()) == ()
+
+
+def test_reported_distance_is_that_of_the_recommended_discard():
+    """134789m12345p599s: the pick stays 2 away although 1 away is reachable.
+
+    ``4m``/``5s`` reach 1 away with 4 tiles of acceptance, but the ranking prefers
+    ``1m`` (2 away, 27 tiles). The reported distance must be the one the
+    recommended discard actually leaves, not the best reachable one - otherwise
+    the UI claims a shanten the engine did not take, and the training page flags
+    its own recommendation as suboptimal.
+    """
+    data = analyze_hand_structured("134789m12345p599s")
+
+    recommended = [d for d in data["discards"] if d["recommended"]]
+    assert [d["tile"] for d in recommended] == ["1m"]
+    assert data["recommended_away_after_discard"] == recommended[0]["away_after_discard"]
+    assert data["recommended_away_after_discard"] == 2
+    # A closer discard exists and is still reported, so the UI can show both.
+    assert data["away_after_discard"] == 1
+    assert min(d["away_after_discard"] for d in data["discards"]) == 1
+
+
+def test_reported_distance_matches_the_best_one_when_nothing_is_given_up():
+    data = analyze_hand_structured("5m456899p2345679s")
+    assert data["recommended_away_after_discard"] == data["away_after_discard"]

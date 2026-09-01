@@ -207,7 +207,7 @@ def _get_most_useless_tile_from(most_useless_tiles: MahjongTiles, candidates_occ
 
 def _print_best_discard_choice(best_results, results, acceptance, hand, basic_yakus=None,
                                prevalent_wind=0, seat_wind=0):
-    best_discard_tile, acceptance_after_discard, acceptance_nb, _by_type = (
+    best_discard_tile, acceptance_after_discard, acceptance_nb, _by_type, _away = (
         _get_best_discard_choice(
             best_results, results, acceptance, hand, basic_yakus,
             prevalent_wind, seat_wind,
@@ -526,6 +526,7 @@ def _get_best_discard_choice(
         candidate_acceptance[to_discard],
         _get_acceptance_tile_number(hand, candidate_acceptance[to_discard]),
         dict(candidate_acceptance_by_type[to_discard]),
+        max(candidate_away[to_discard] - 1, 0),
     )
 
 
@@ -774,17 +775,25 @@ def get_tile_to_discard_from(hand: MahjongHand, prevalent_wind=0, seat_wind=0):
     :param seat_wind: seat wind (1-4) or 0 if unknown
     :return: ((discard, acceptance, acceptance_nb, acceptance_by_type), away,
              best_results, yakus, results, acceptance)
+
+    ``away`` is the distance left by *the recommended discard*, which is not
+    always the smallest reachable one: the ranking deliberately gives up a step
+    of shanten when the wider, more valuable shape is worth more (for instance
+    ``134789m12345p599s``, where discarding ``1m`` stays 2 away while ``4m``
+    would reach 1 away). ``min(candidate_away) - 1`` is the best reachable
+    distance and is exposed separately by :func:`get_discard_choices`.
     """
     if not hand.needs_to_discard():
         raise AttributeError(f"Number of tiles not supported : {len(hand.hand_tiles)}")
     results, acceptance, best_results, nb_away, yakus = analyze_hand(
         hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
+    choice = _get_best_discard_choice(
+        best_results, results, acceptance, hand, yakus, prevalent_wind, seat_wind
+    )
     return (
-        _get_best_discard_choice(
-            best_results, results, acceptance, hand, yakus, prevalent_wind, seat_wind
-        ),
-        nb_away - 1,
+        choice[:4],
+        choice[4],
         best_results,
         yakus,
         results,
@@ -981,6 +990,17 @@ def analyze_hand_structured(
             for tile, acc, count, by_type, recommended, score, away in choices
         ]
         data["away_after_discard"] = max(closest_away - 1, 0)
+        recommended = next(
+            (entry for entry in data["discards"] if entry["recommended"]), None
+        )
+        # The recommendation is allowed to stay further from a win when the wider
+        # or more valuable shape is worth the extra step, so the distance it
+        # actually leaves can exceed the best reachable one.
+        data["recommended_away_after_discard"] = (
+            recommended["away_after_discard"]
+            if recommended
+            else data["away_after_discard"]
+        )
     else:
         full_acceptance = get_simple_acceptance(results, best_results, acceptance)
         data["full_acceptance"] = sorted(str(tile) for tile in full_acceptance)

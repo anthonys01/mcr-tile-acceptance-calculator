@@ -308,7 +308,7 @@
     const pending = {};
 
     // keep version in sync with training_worker.js APP_VERSION for cache-busting
-    const APP_VERSION = "2026-07-24-1";
+    const APP_VERSION = "2026-09-01-1";
     function initEngine() {
       worker = new Worker('training_worker.js?v=' + APP_VERSION, { type: 'module' });
       worker.onmessage = (event) => {
@@ -342,6 +342,15 @@
     }
 
     function setMessage(html) { document.getElementById('message').innerHTML = html; }
+    // Any rejected engine call must clear the "thinking" spinner, otherwise the
+    // UI stays stuck on it forever with no clue about what went wrong.
+    function engineFailure(err) {
+      console.error(err);
+      setMessage('Engine error: ' + ((err && err.message) || err)
+        + '<br>Turn aborted — press “New Game” to restart.');
+      document.getElementById('newGameBtn').disabled = false;
+      if (state) state.finished = true;
+    }
     function setLoading(on) {
       document.getElementById('message').innerHTML = on ? '<span id="loading">Engine is thinking…</span>' : '';
     }
@@ -448,7 +457,7 @@
       zone.innerHTML = html;
       if (clickable) {
         zone.querySelectorAll('.clickable').forEach(el => {
-          el.addEventListener('click', () => onDiscard(el.dataset.tile));
+          el.addEventListener('click', () => onDiscard(el.dataset.tile).catch(engineFailure));
         });
       }
     }
@@ -532,7 +541,11 @@
         + `you discarded ${tileImg(rec.discard, 'mini static')} `
         + `(acceptance ${userData.number} tiles) — <b>${userData.away}-away</b>.</div>`
         + `<div>Best discard: ${tileImg(engTile, 'mini static')} `
-        + `(acceptance ${engData.number} tiles) — <b>${engData.away}-away</b>. `;
+        + `(acceptance ${engData.number} tiles) — <b>${engData.away}-away</b>`
+        + (engData.best_away !== undefined && engData.best_away < engData.away
+            ? `, ${engData.best_away}-away possible`
+            : ``)
+        + `. `;
       if (rec.isError && userData.away === engData.away) {
         html += `<div>Difference: <b>${diff} tiles</b>.</div>`
       }
@@ -602,7 +615,9 @@
     // one-char codec flag ('z' deflate-raw, 'u' plain) so old links stay readable.
     //   {v, s:seed, pw, sw, h:[13 tile idx], L:[type labels], t:[turns], w:wins|null}
     //   turn  = [drawnIdx, discardIdx, engDiscardIdx, engBlock, userBlock|null]
-    //   block = [away, [accIdx...], [[labelId, [accIdx...]], ...]]
+    //   block = [away, [accIdx...], [[labelId, [accIdx...]], ...], best_away?]
+    // ``best_away`` is optional (engine blocks only, and only when it differs from
+    // ``away``), so links produced before it existed still decode.
     //   wins  = [[tileIdx, points, table, [[tileIdx...], ...]], ...]
     // Acceptance *numbers* are never stored: they are a pure function of the
     // acceptance tiles and of the visible-tile vector, which the decoder replays.
@@ -650,11 +665,15 @@
         if (i < 0) { i = labels.length; labels.push(name); }
         return i;
       };
-      const encBlock = (d) => [
-        d.away,
-        d.acceptance.map(tileIndex),
-        (d.best_results_acceptance || []).map(r => [labelId(r.type), r.acceptance.map(tileIndex)]),
-      ];
+      const encBlock = (d) => {
+        const block = [
+          d.away,
+          d.acceptance.map(tileIndex),
+          (d.best_results_acceptance || []).map(r => [labelId(r.type), r.acceptance.map(tileIndex)]),
+        ];
+        if (d.best_away !== undefined && d.best_away < d.away) block.push(d.best_away);
+        return block;
+      };
       const turns = state.history.map(rec => [
         tileIndex(rec.drawn), tileIndex(rec.discard), tileIndex(rec.engDiscard),
         encBlock(rec.eng),
@@ -677,6 +696,7 @@
         const acceptance = b[1].map(tileFromIndex);
         return {
           away: b[0],
+          best_away: b.length > 3 ? b[3] : b[0],
           acceptance,
           number: acceptanceNumber(acceptance, visible),
           best_results_acceptance: (b[2] || []).map(r => {
@@ -776,7 +796,7 @@
       if (last) renderFeedback(last, false);
       renderDiscards();
     }
-    document.getElementById('newGameBtn').addEventListener('click', newGame);
+    document.getElementById('newGameBtn').addEventListener('click', () => newGame().catch(engineFailure));
     document.getElementById('shareBtn').addEventListener('click', copyRunLink);
     document.getElementById('copySeedBtn').addEventListener('click', () => {
       const seed = document.getElementById('seedValue').textContent;

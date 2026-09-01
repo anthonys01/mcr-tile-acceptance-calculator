@@ -45,6 +45,10 @@ SNAPSHOT_HANDS = [
     # --- discard-ranking regression: raw acceptance prefers 6s (16 tiles) but
     # discarding it breaks the made 567s chow; 7p (15 tiles) is the rollout pick ---
     "13m35679s24567p55z",
+    # --- discard-ranking regression: the recommendation deliberately gives up a
+    # step of shanten. 4m/5s reach 1 away with 4 tiles of acceptance; 1m stays
+    # 2 away but accepts 27, and rollouts put it first (35.5% vs 29.5%/24.5%) ---
+    "134789m12345p599s",
 ]
 
 

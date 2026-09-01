@@ -352,7 +352,7 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
   <script>
     // Bump on every release so browsers fetch fresh Python sources (see init()).
-    const APP_VERSION = "2026-07-24-1";
+    const APP_VERSION = "2026-09-01-1";
     // ---------- Tile helpers ----------
     const SUITS = [
       { key: "m", label: "Characters (m)", nums: [1,2,3,4,5,6,7,8,9] },
@@ -875,9 +875,18 @@ Example of valid format: 146(789)m[3333](4444)p14z</pre>
       summary.appendChild(hrow);
       const info = el("div", "row");
       info.style.marginTop = "8px";
-      const awayTxt = data.needs_discard
-        ? `${data.away_after_discard} away after best discard`
-        : `${data.closest_away} away`;
+      const recAway = data.recommended_away_after_discard !== undefined
+        ? data.recommended_away_after_discard
+        : data.away_after_discard;
+      let awayTxt;
+      if (!data.needs_discard) {
+        awayTxt = `${data.closest_away} away`;
+      } else if (recAway > data.away_after_discard) {
+        // The ranking traded a step of shanten for a wider or more valuable shape.
+        awayTxt = `${recAway} away after best discard, ${data.away_after_discard} away possible`;
+      } else {
+        awayTxt = `${recAway} away after best discard`;
+      }
       info.appendChild(el("span", "badge away", awayTxt));
       info.appendChild(el("span", "hint", "Notation: " + data.hand));
       summary.appendChild(info);

@@ -122,13 +122,19 @@ def analyze_turn(
         away,
         best_results,
         _yk,
-        _results,
+        results,
         _acceptance,
     ) = get_tile_to_discard_from(
         hand, prevalent_wind=prevalent_wind, seat_wind=seat_wind
     )
     engine_discard = str(engine_discard)
     acc_tiles = sorted(acc)
+    # Smallest distance any discard could reach. The engine deliberately gives up a
+    # step when a wider or more valuable shape is worth more, so `away` (the
+    # distance the recommended discard actually leaves) can be larger than this.
+    best_away = max(
+        min(len(results[hand_type][0][1]) for hand_type in best_results) - 1, 0
+    )
 
     return json.dumps(
         {
@@ -137,6 +143,7 @@ def analyze_turn(
                 "acceptance": [str(tile) for tile in acc_tiles],
                 "number": _acceptance_number(acc_tiles, visible),
                 "away": away,
+                "best_away": best_away,
                 "best_results": list(best_results),
                 "best_results_acceptance": _acceptance_by_type_payload(
                     acc_by_type, visible
