@@ -2,6 +2,7 @@ from collections import Counter
 from functools import cache, partial, reduce
 from itertools import product
 
+from acceptance import CombinationAcceptance
 from group_finder import all_groups_for
 from hand_scorer import get_best_yakus_for_won_hand, get_tenpai_acceptance
 from mahjong_objects import MahjongHand, MahjongCombination, MahjongGroup, MahjongTile
@@ -20,7 +21,7 @@ def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0, self_dr
         Some shapes only reach the 8-point minimum when self-drawn, so this
         widens the acceptance; see ``discard_ranking``.
     """
-    acceptance = set()
+    per_combination: dict = {}
     possible_hands = []
     kept_yakus = []
     for comb, added_tiles, yakus, won_hand in _get_all_possible_yakus(
@@ -28,8 +29,8 @@ def can_construct_hand(hand: MahjongHand, prevalent_wind=0, seat_wind=0, self_dr
     ):
         possible_hands.append(comb)
         kept_yakus.append((won_hand, yakus))
-        acceptance.update(added_tiles)
-    return possible_hands, acceptance, kept_yakus
+        per_combination.setdefault(tuple(comb[0]), set()).update(added_tiles)
+    return possible_hands, CombinationAcceptance(per_combination), kept_yakus
 
 
 def _compute_acceptance_for_winning_tile(

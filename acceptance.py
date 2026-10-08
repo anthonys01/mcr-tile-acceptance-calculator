@@ -38,6 +38,36 @@ def get_full_tile_acceptance(
     return acceptance
 
 
+class CombinationAcceptance(set):
+    """Acceptance pool of a hand type (the union over all its combinations) that
+    also remembers the narrower pool each combination was built from.
+
+    A hand type may reach its best distance through several pattern instances
+    (e.g. two different Mixed Shifted Chows). Intersecting a combination's group
+    acceptance with the union pool would then credit it with tiles only useful to
+    another instance, so consumers should go through ``useful_acceptance_of``.
+    """
+
+    def __init__(self, per_combination: dict):
+        super().__init__()
+        self.per_combination = per_combination
+        for pool in per_combination.values():
+            self.update(pool)
+
+    def pool_for(self, groups) -> set:
+        return self.per_combination.get(tuple(groups), self)
+
+    def __reduce__(self):
+        return CombinationAcceptance, (self.per_combination,)
+
+
+def useful_acceptance_of(groups, acceptance_pool) -> set[MahjongTile]:
+    """Tiles of ``acceptance_pool`` that improve the given combination groups."""
+    if isinstance(acceptance_pool, CombinationAcceptance):
+        acceptance_pool = acceptance_pool.pool_for(groups)
+    return get_tile_acceptance_of_groups(groups).intersection(acceptance_pool)
+
+
 def get_tile_acceptance_of_groups(groups: MahjongGroups) -> set[MahjongTile]:
     acceptance = set()
     number_of_pairs = sum(_is_pair(group) for group in groups)

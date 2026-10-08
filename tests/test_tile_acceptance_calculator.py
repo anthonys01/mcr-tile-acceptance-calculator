@@ -194,3 +194,35 @@ def test_reported_distance_is_that_of_the_recommended_discard():
 def test_reported_distance_matches_the_best_one_when_nothing_is_given_up():
     data = analyze_hand_structured("5m456899p2345679s")
     assert data["recommended_away_after_discard"] == data["away_after_discard"]
+
+
+def test_pattern_hand_type_keeps_every_equally_close_instance():
+    """46789m34s3444567p is two away from two different Mixed Shifted Chows.
+
+    234s 345p 456m (missing 2s, 5m) and 345s 456m 567p (missing 5s, 5m) are
+    equally close. Only the first one used to be kept, so discarding 3p or 4p
+    (which only the second one allows) showed acceptance tiles with no hand type.
+    """
+    data = analyze_hand_structured("46789m34s3444567p")
+    mixed_shifted = next(
+        hand_type for hand_type in data["hand_types"]
+        if hand_type["name"] == "Mixed Shifted"
+    )
+    residues = {tuple(combo["residue"]) for combo in mixed_shifted["combos"]}
+    assert residues == {("6p", "7p"), ("3p", "4p")}
+    assert set(mixed_shifted["acceptance"]) == {"2s", "5m", "5s"}
+
+    by_tile = {discard["tile"]: discard for discard in data["discards"]}
+    for tile in ("3p", "4p"):
+        # 2s only helps the other instance, it must not leak into this discard
+        assert by_tile[tile]["by_type"] == {"Mixed Shifted": ["5m", "5s"]}, tile
+        assert by_tile[tile]["acceptance"] == ["5m", "5s"], tile
+    for tile in ("6p", "7p"):
+        assert by_tile[tile]["by_type"] == {"Mixed Shifted": ["2s", "5m"]}, tile
+
+
+def test_every_discard_acceptance_is_attributed_to_a_hand_type():
+    data = analyze_hand_structured("46789m34s3444567p")
+    for discard in data["discards"]:
+        attributed = set().union(*map(set, discard["by_type"].values()))
+        assert attributed == set(discard["acceptance"]), discard["tile"]

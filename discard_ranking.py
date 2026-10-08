@@ -80,8 +80,8 @@ from collections import defaultdict
 from functools import lru_cache
 
 from acceptance import (
-    get_tile_acceptance_of_groups,
     get_tile_acceptance_of_knitted_groups,
+    useful_acceptance_of,
 )
 from hand_scorer import get_total_points
 from hand_types.basic import can_construct_hand
@@ -182,7 +182,7 @@ def useful_acceptance_for_tile(
         return get_tile_acceptance_of_knitted_groups(combi).intersection(
             acceptance_pool
         )
-    return get_tile_acceptance_of_groups(combi).intersection(acceptance_pool)
+    return useful_acceptance_of(combi, acceptance_pool)
 
 
 def _value_weight(points: float) -> float:
@@ -268,7 +268,7 @@ def _self_draw_only_acceptance(
         for tile in set(residue):
             if tile not in candidates:
                 continue
-            useful = get_tile_acceptance_of_groups(combi).intersection(pool)
+            useful = useful_acceptance_of(combi, pool)
             extra[tile].update(useful)
     for tile, tiles in extra.items():
         tiles.difference_update(ron_basic_acceptance.get(tile, ()))

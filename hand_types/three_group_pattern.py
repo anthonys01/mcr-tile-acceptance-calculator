@@ -1,4 +1,4 @@
-from acceptance import get_tile_acceptance_of_groups
+from acceptance import CombinationAcceptance, get_tile_acceptance_of_groups
 from hand_types.common import (
     get_read_groups_from_combi_tiles,
     can_construct_one_group_one_pair,
@@ -26,9 +26,11 @@ def can_construct_with_3_group_pattern(
     :param cache: global cache for the leftover pair or element + pair
     """
     best_shanten: int = 13
-    best_result: list[MahjongCombination] = []
-    best_combi: list[MahjongGroup] = []
-    best_acceptance: MahjongTiles = []
+    # every pattern instance reaching the best shanten is kept: a hand can be
+    # equally close to several instances (e.g. 234s 345p 456m and 345s 456m 567p)
+    best_candidates: list[
+        tuple[list[MahjongGroup], list[MahjongCombination], MahjongTiles]
+    ] = []
 
     for pattern in pattern_generator(input_pattern):
         orig_combi = parse_tiles(pattern)
@@ -56,16 +58,30 @@ def can_construct_with_3_group_pattern(
             shanten, result = can_construct_one_pair(tiles, cache)
         else:
             shanten, result = can_construct_one_group_one_pair(tiles, cache)
+        if shanten > best_shanten:
+            continue
         if shanten < best_shanten:
             best_shanten = shanten
-            best_combi = get_read_groups_from_combi_tiles(
-                combi, orig_combi_groups
-            ) + list(other_declared_groups)
-            best_result = result
-            best_acceptance = missing
-    acceptance: set[MahjongTile] = set(best_acceptance)
+            best_candidates = []
+        best_combi = get_read_groups_from_combi_tiles(
+            combi, orig_combi_groups
+        ) + list(other_declared_groups)
+        best_candidates.append((best_combi, result, missing))
     result_to_return: list[MahjongCombination] = []
-    for groups, res in best_result:
-        acceptance.update(get_tile_acceptance_of_groups(groups))
-        result_to_return.append((tuple(best_combi + list(groups)), res))
-    return result_to_return, acceptance
+    per_combination: dict = {}
+    seen: set = set()
+    for best_combi, best_result, best_acceptance in best_candidates:
+        pattern_acceptance: set[MahjongTile] = set(best_acceptance)
+        for groups, _res in best_result:
+            pattern_acceptance.update(get_tile_acceptance_of_groups(groups))
+        for groups, res in best_result:
+            combination = (tuple(best_combi + list(groups)), res)
+            per_combination.setdefault(combination[0], set()).update(
+                pattern_acceptance
+            )
+            key = (combination[0], tuple(sorted(t.index for t in res)))
+            if key in seen:
+                continue
+            seen.add(key)
+            result_to_return.append(combination)
+    return result_to_return, CombinationAcceptance(per_combination)

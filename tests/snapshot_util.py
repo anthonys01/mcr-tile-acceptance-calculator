@@ -49,6 +49,9 @@ SNAPSHOT_HANDS = [
     # step of shanten. 4m/5s reach 1 away with 4 tiles of acceptance; 1m stays
     # 2 away but accepts 27, and rollouts put it first (35.5% vs 29.5%/24.5%) ---
     "134789m12345p599s",
+    # --- two equally close Mixed Shifted Chows (234s 345p 456m and
+    # 345s 456m 567p); both must be kept so 3p/4p discards are attributed ---
+    "46789m34s3444567p",
 ]
 
 

@@ -8,8 +8,8 @@ from enum import Enum
 from typing import Iterable
 
 from acceptance import (
-    get_tile_acceptance_of_groups,
     get_tile_acceptance_of_knitted_groups,
+    useful_acceptance_of,
 )
 from hand_types.all_pungs import can_construct_all_pungs
 from hand_types.all_types import can_construct_all_types
@@ -367,10 +367,7 @@ def _build_discard_candidates(
                         combi
                     ).intersection(acceptance_pool)
                 else:
-                    hand_full_acceptance = get_tile_acceptance_of_groups(combi)
-                    useful_acceptance = hand_full_acceptance.intersection(
-                        acceptance_pool
-                    )
+                    useful_acceptance = useful_acceptance_of(combi, acceptance_pool)
                 by_away[tile][away].update(useful_acceptance)  # union
                 if label is not None:
                     by_away_and_type[tile][away][label].update(useful_acceptance)
@@ -613,10 +610,7 @@ def get_simple_acceptance(results, best_results, acceptance):
             if best_result == HandType.SEVEN_PAIRS.value or (best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4):
                 simple_acceptance.update(acceptance_pool)
             else:
-                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
-                simple_acceptance.update(
-                    hand_full_acceptance.intersection(acceptance_pool)
-                )
+                simple_acceptance.update(useful_acceptance_of(combi, acceptance_pool))
     return simple_acceptance
 
 
@@ -643,9 +637,8 @@ def get_acceptance_by_hand_type(results, best_results, acceptance, basic_yakus=N
             if best_result == HandType.SEVEN_PAIRS.value or (best_result == HandType.KNITTED.value and len(results[best_result][0][0]) == 4):
                 acceptance_by_type[label].update(acceptance_pool)
             else:
-                hand_full_acceptance = get_tile_acceptance_of_groups(combi)
                 acceptance_by_type[label].update(
-                    hand_full_acceptance.intersection(acceptance_pool)
+                    useful_acceptance_of(combi, acceptance_pool)
                 )
     return dict(acceptance_by_type)
 
